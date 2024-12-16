@@ -24,8 +24,15 @@ This is a test MDX file.
 
     // Create minimal next.config.js
     const nextConfig = `
-      const { withMDXE } = require('${process.cwd()}')
-      module.exports = withMDXE({})
+      const withMDXE = async () => {
+        const { default: mdxe } = await import('${process.cwd()}/dist/index.js')
+        return mdxe.withMDXE
+      }
+
+      module.exports = async () => {
+        const plugin = await withMDXE()
+        return plugin({})
+      }
     `
     fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 
@@ -35,7 +42,8 @@ This is a test MDX file.
       version: '1.0.0',
       private: true,
       scripts: {
-        build: 'next build'
+        build: 'next build',
+        start: 'next start'
       }
     }
     fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))

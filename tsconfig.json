@@ -7,7 +7,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDirs": ["./src", "./examples"],
     "strict": true,
     "moduleResolution": "node",
     "baseUrl": ".",
