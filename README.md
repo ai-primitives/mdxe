@@ -1,31 +1,78 @@
 # mdxe - Zero-Config Executable MDX
 
-[![npm version](https://badge.fury.io/js/%40ai-primitives%2Fpackage-template.svg)](https://www.npmjs.com/package/@ai-primitives/package-template)
+[![npm version](https://badge.fury.io/js/mdxe.svg)](https://www.npmjs.com/package/mdxe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A modern TypeScript package template with Vitest, Prettier, ESLint, and semantic versioning.
+Zero-config MDX processor with NextJS integration, supporting both standalone CLI and plugin modes.
 
 ## Features
 
-- 🚀 TypeScript for type safety and modern JavaScript features
-- ⚡️ Vitest for fast, modern testing
-- 🎨 Prettier for consistent code formatting
-- 🔍 ESLint for code quality
-- 📦 Semantic versioning with automated releases
-- 🔄 GitHub Actions for CI/CD
+- 🚀 Zero-config MDX processing
+- ⚡️ NextJS integration (plugin & standalone)
+- 📦 Layout and component exports
+- 🎨 Default Tailwind Typography styling
+- 🔄 File watching and hot reload
+- 📝 App Router metadata support
+- 🌐 Remote component imports (esm.sh)
 
 ## Installation
 
 ```bash
-pnpm add @ai-primitives/package-template
+pnpm add mdxe
 ```
 
 ## Usage
 
-```typescript
-import { add } from '@ai-primitives/package-template'
+### CLI Mode
+```bash
+# Process single file
+mdxe myfile.mdx
 
-const result = add(1, 2) // returns 3
+# Process directory
+mdxe ./content
+
+# Watch mode with NextJS
+mdxe dev
+```
+
+### NextJS Plugin
+```javascript
+// next.config.js
+import { withMDXE } from 'mdxe/next'
+
+export default withMDXE({
+  // your next.js config
+})
+```
+
+### MDX Exports
+```mdx
+export const layout = './layouts/BlogPost'
+export const components = {
+  Button: './components/Button'
+}
+
+# My Content
+```
+
+## Configuration
+
+Configure via package.json:
+```json
+{
+  "mdxe": {
+    "layouts": "./layouts",
+    "components": "./components"
+  }
+}
+```
+
+Or mdxe.config.js:
+```javascript
+export default {
+  layouts: './layouts',
+  components: './components'
+}
 ```
 
 ## Development
@@ -37,32 +84,13 @@ pnpm install
 # Run tests
 pnpm test
 
-# Run tests in watch mode
-pnpm test:watch
-
 # Build the package
 pnpm build
 
-# Lint the code
-pnpm lint
-
-# Format the code
+# Format code
 pnpm format
 ```
-
-## Contributing
-
-Please read our [Contributing Guide](./CONTRIBUTING.md) to learn about our development process and how to propose bugfixes and improvements.
 
 ## License
 
 MIT © [AI Primitives](https://mdx.org.ai)
-
-## Dependencies
-
-This package uses the following key dependencies:
-
-- TypeScript for static typing
-- Vitest for testing
-- ESLint for linting
-- Prettier for code formatting
