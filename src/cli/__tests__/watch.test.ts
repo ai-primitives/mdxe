@@ -3,15 +3,13 @@ import { spawn } from 'child_process'
 import { join, resolve } from 'path'
 import { mkdirSync, writeFileSync, rmSync, openSync, closeSync } from 'fs'
 import fetch from 'node-fetch'
-import { sleep } from '../../test/setup'
+import { sleep, debug } from '../../test/setup'
 
 describe('Watch Mode', () => {
   const testDir = join(process.cwd(), 'test-watch-mode')
   const singleFile = join(testDir, 'test.mdx')
   const multiDir = join(testDir, 'content')
-  let watchProcess: ReturnType<typeof spawn>
-
-  const debug = (...args: unknown[]) => console.log('[Watch Test Debug]', ...args)
+  let watchProcess: ReturnType<typeof spawn> | null = null
 
   beforeEach(() => {
     mkdirSync(testDir, { recursive: true })
@@ -51,28 +49,21 @@ module.exports = withMDXE({})
   })
 
   afterEach(async () => {
-    try {
-      if (watchProcess) {
-        try {
-          watchProcess.kill()
-        } catch (e) {
-          debug('Error killing main process:', e)
-        }
-
-        if (watchProcess.pid) {
-          try {
-            process.kill(-watchProcess.pid, 'SIGTERM')
-          } catch (e) {
-            debug('Error killing child processes:', e)
-          }
-        }
-      }
-    } finally {
+    debug('Cleaning up watch process and test directory...')
+    if (watchProcess) {
       try {
-        rmSync(testDir, { recursive: true, force: true })
-      } catch (e) {
-        debug('Error cleaning up test directory:', e)
+        watchProcess.kill('SIGTERM')
+        await sleep(1000) // Wait for process to terminate
+      } catch (error) {
+        debug('Error killing watch process:', error)
       }
+      watchProcess = null
+    }
+
+    try {
+      rmSync(testDir, { recursive: true, force: true })
+    } catch (error) {
+      debug('Error removing test directory:', error)
     }
   })
 
