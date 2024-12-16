@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, MockedFunction } from 'vitest'
 import { processMDX } from '../processor'
 import { resolveRemoteImport, fetchRemoteComponent } from '../remote'
 
@@ -23,8 +23,8 @@ title: Test
       Button: 'react-button'
     }
 
-    ;(resolveRemoteImport as any).mockResolvedValueOnce('https://esm.sh/react-button@1.0.0')
-    ;(fetchRemoteComponent as any).mockResolvedValueOnce('export default function Button() {}')
+    ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce('https://esm.sh/react-button@1.0.0')
+    ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function Button() {}')
 
     const result = await processMDX({
       filepath: 'test.mdx',
@@ -41,8 +41,8 @@ title: Test
     const mockContent = '# Hello World'
     const mockLayout = '@layouts/blog'
 
-    ;(resolveRemoteImport as any).mockResolvedValueOnce('https://esm.sh/@layouts/blog@1.0.0')
-    ;(fetchRemoteComponent as any).mockResolvedValueOnce('export default function BlogLayout() {}')
+    ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce('https://esm.sh/@layouts/blog@1.0.0')
+    ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function BlogLayout() {}')
 
     const result = await processMDX({
       filepath: 'test.mdx',
@@ -61,7 +61,7 @@ title: Test
       Button: 'https://esm.sh/react-button@1.0.0'
     }
 
-    ;(fetchRemoteComponent as any).mockResolvedValueOnce('export default function Button() {}')
+    ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function Button() {}')
 
     const result = await processMDX({
       filepath: 'test.mdx',
