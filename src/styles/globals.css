@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.prose {
+  @apply max-w-none;
+}
+
+.prose pre {
+  @apply bg-gray-100 dark:bg-gray-900;
+}
+
+.prose code {
+  @apply text-gray-800 dark:text-gray-200 px-1 py-0.5 rounded;
+  @apply bg-gray-100 dark:bg-gray-900;
+}
