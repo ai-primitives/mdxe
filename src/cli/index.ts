@@ -150,21 +150,29 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   if (isDirectory || config.watch?.enabled) {
     const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
+    const absolutePatterns = patterns.map(p => resolve(process.cwd(), p))
 
-    const watcher = watch(patterns, {
+    console.log('Starting watcher with patterns:', absolutePatterns)
+    const watcher = watch(absolutePatterns, {
       ignored: config.watch?.ignore,
       persistent: true,
+      ignoreInitial: false,
+      cwd: process.cwd(),
     })
 
     console.log('Watching for changes...')
+    watcher.on('ready', () => console.log('Initial scan complete'))
     watcher.on('add', async (file) => {
-      console.log(`File ${file} has been added`)
-      await processMDXFile(file, config)
+      const absolutePath = resolve(process.cwd(), file)
+      console.log(`File ${absolutePath} has been added`)
+      await processMDXFile(absolutePath, config)
     })
     watcher.on('change', async (file) => {
-      console.log(`File ${file} has been changed`)
-      await processMDXFile(file, config)
+      const absolutePath = resolve(process.cwd(), file)
+      console.log(`File ${absolutePath} has been changed`)
+      await processMDXFile(absolutePath, config)
     })
+    watcher.on('error', (error) => console.error('Watcher error:', error))
 
     // Handle cleanup
     process.on('SIGINT', () => {

@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
 import { spawn } from 'child_process'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import fetch from 'node-fetch'
 import { sleep } from '../../test/setup'
@@ -78,11 +78,21 @@ module.exports = withMDXE({})
 
   it('should detect changes in single file mode', async () => {
     let hasProcessedFile = false
-    const args = ['--watch', singleFile]
+    const absolutePath = resolve(process.cwd(), singleFile)
+    const args = ['--watch', absolutePath]
 
+    // Create initial file
+    writeFileSync(
+      absolutePath,
+      `# Initial Test\nThis is a test file.\n`,
+      'utf-8'
+    )
+
+    debug('Starting watch process with args:', args)
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      detached: true
+      detached: true,
+      cwd: process.cwd(),
     })
 
     if (!watchProcess.stdout) {
@@ -93,6 +103,7 @@ module.exports = withMDXE({})
       const output = data.toString()
       debug('Watch process output:', output)
       if (output.includes('has been changed')) {
+        debug('Change event detected')
         hasProcessedFile = true
       }
     })
@@ -110,7 +121,7 @@ module.exports = withMDXE({})
 
     debug('Modifying test file...')
     writeFileSync(
-      singleFile,
+      absolutePath,
       `
 # Updated Test
 This is an updated test file.
