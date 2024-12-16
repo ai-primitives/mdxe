@@ -11,15 +11,12 @@ describe('Watch Mode', () => {
   const multiDir = join(testDir, 'content')
   let watchProcess: ReturnType<typeof spawn>
 
-  // Add debug logging
-  const debug = (msg: string) => console.log(`[Watch Test Debug] ${msg}`)
+  const debug = (...args: unknown[]) => console.log('[Watch Test Debug]', ...args)
 
   beforeEach(() => {
-    // Create test directories
     mkdirSync(testDir, { recursive: true })
     mkdirSync(multiDir, { recursive: true })
 
-    // Create initial test files
     writeFileSync(
       singleFile,
       `
@@ -44,7 +41,6 @@ Initial content for page 2
     `,
     )
 
-    // Create test next.config.js
     writeFileSync(
       join(testDir, 'next.config.js'),
       `
@@ -54,13 +50,30 @@ module.exports = withMDXE({})
     )
   })
 
-  afterEach(() => {
-    if (watchProcess) {
-      watchProcess.kill()
-      // Ensure child processes are cleaned up
-      process.kill(-watchProcess.pid!, 'SIGKILL')
+  afterEach(async () => {
+    try {
+      if (watchProcess) {
+        try {
+          watchProcess.kill()
+        } catch (e) {
+          debug('Error killing main process:', e)
+        }
+
+        if (watchProcess.pid) {
+          try {
+            process.kill(-watchProcess.pid, 'SIGTERM')
+          } catch (e) {
+            debug('Error killing child processes:', e)
+          }
+        }
+      }
+    } finally {
+      try {
+        rmSync(testDir, { recursive: true, force: true })
+      } catch (e) {
+        debug('Error cleaning up test directory:', e)
+      }
     }
-    rmSync(testDir, { recursive: true, force: true })
   })
 
   it('should detect changes in single file mode', async () => {
@@ -84,11 +97,9 @@ module.exports = withMDXE({})
       }
     })
 
-    // Wait for initial processing
     debug('Waiting for initial processing...')
     await sleep(5000)
 
-    // Modify the file
     debug('Modifying test file...')
     writeFileSync(
       singleFile,
@@ -98,7 +109,6 @@ Updated content
     `,
     )
 
-    // Wait for file change detection and verify processing
     debug('Waiting for file change detection...')
     await sleep(10000)
     expect(hasProcessedFile).toBe(true)
@@ -125,11 +135,9 @@ Updated content
       }
     })
 
-    // Wait for initial processing
     debug('Waiting for initial processing...')
     await sleep(5000)
 
-    // Modify existing file
     debug('Modifying page1.mdx...')
     writeFileSync(
       join(multiDir, 'page1.mdx'),
@@ -139,7 +147,6 @@ Updated content for page 1
     `,
     )
 
-    // Add new file
     debug('Adding page3.mdx...')
     writeFileSync(
       join(multiDir, 'page3.mdx'),
@@ -149,7 +156,6 @@ New page content
     `,
     )
 
-    // Wait for file change detection and verify processing
     debug('Waiting for file change detection...')
     await sleep(10000)
     expect(hasProcessedFiles).toBe(true)
@@ -159,7 +165,6 @@ New page content
     const port = 3457
     const args = ['--watch', '--next', testDir]
 
-    // Create pages directory for Next.js
     mkdirSync(join(testDir, 'pages'), { recursive: true })
     writeFileSync(
       join(testDir, 'pages', 'index.mdx'),
@@ -187,16 +192,13 @@ Testing next dev integration
       expect(output).toContain('Watch Mode Test')
     })
 
-    // Wait for Next.js dev server to start
     debug('Waiting for Next.js dev server to start...')
     await sleep(5000)
 
-    // Test initial page load
     const response = await fetch(`http://localhost:${port}`)
     const html = await response.text()
     expect(html).toContain('Watch Mode Test')
 
-    // Modify the page
     debug('Modifying index.mdx...')
     writeFileSync(
       join(testDir, 'pages', 'index.mdx'),
@@ -206,11 +208,9 @@ Updated content for testing
     `,
     )
 
-    // Wait for hot reload
     debug('Waiting for hot reload...')
     await sleep(5000)
 
-    // Test updated content
     const updatedResponse = await fetch(`http://localhost:${port}`)
     const updatedHtml = await updatedResponse.text()
     expect(updatedHtml).toContain('Updated content for testing')

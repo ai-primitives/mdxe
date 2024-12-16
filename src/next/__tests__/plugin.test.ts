@@ -70,7 +70,7 @@ This is a test MDX file.
       expect(fs.existsSync(buildDir)).toBe(true)
 
       // Verify MDX file was processed
-      const buildFiles = fs.readdirSync(path.join(buildDir, 'server', 'pages'))
+      const buildFiles = fs.readdirSync(path.join(buildDir, 'server', 'app'))
       expect(buildFiles.some((file) => file.includes('test'))).toBe(true)
     } finally {
       process.chdir(cwd)

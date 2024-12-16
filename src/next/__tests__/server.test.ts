@@ -89,8 +89,12 @@ This page tests the production server functionality.
       expect(html).toContain('This page tests the production server functionality')
     } finally {
       // Cleanup
-      if (serverProcess && serverProcess.pid) {
-        process.kill(-serverProcess.pid)
+      try {
+        if (serverProcess && serverProcess.pid) {
+          process.kill(-serverProcess.pid, 'SIGTERM')
+        }
+      } catch (e) {
+        console.error('Error cleaning up server process:', e)
       }
       process.chdir(cwd)
     }
