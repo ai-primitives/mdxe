@@ -2,6 +2,7 @@ import { compile } from '@mdx-js/mdx'
 import matter from 'gray-matter'
 import { readFileSync } from 'fs'
 import type { CompileOptions } from '@mdx-js/mdx'
+import { resolveRemoteImport, fetchRemoteComponent } from './remote'
 
 interface MDXProcessorOptions {
   filepath: string
@@ -15,6 +16,19 @@ export interface ProcessedMDX {
   code: string
   frontmatter: Record<string, unknown>
   metadata: Record<string, unknown>
+}
+
+async function resolveComponent(componentPath: string): Promise<string> {
+  if (componentPath.startsWith('http://') || componentPath.startsWith('https://')) {
+    return await fetchRemoteComponent(componentPath)
+  }
+
+  if (componentPath.startsWith('.')) {
+    return componentPath
+  }
+
+  const remoteUrl = await resolveRemoteImport({ url: componentPath })
+  return await fetchRemoteComponent(remoteUrl)
 }
 
 export async function processMDX({
@@ -38,18 +52,26 @@ export async function processMDX({
 
     const exports: string[] = []
     if (layout) {
-      exports.push(`export const layout = '${layout}'`)
+      const resolvedLayout = await resolveComponent(layout)
+      exports.push(`import Layout from '${resolvedLayout}'`)
+      exports.push('export { Layout as layout }')
     }
     if (components) {
-      try {
-        const componentsExport = `export const components = ${JSON.stringify(components)}`
-        exports.push(componentsExport)
-      } catch (error) {
-        throw new Error(`Failed to stringify components: ${error instanceof Error ? error.message : String(error)}`)
+      const resolvedComponents: Record<string, string> = {}
+      for (const [name, path] of Object.entries(components)) {
+        resolvedComponents[name] = await resolveComponent(path)
       }
+      Object.entries(resolvedComponents).forEach(([name, path], index) => {
+        exports.push(`import Component${index} from '${path}'`)
+        exports.push(`export const ${name} = Component${index}`)
+      })
+      const componentExports = Object.keys(components).map(name => `  ${name}`).join(',\n')
+      exports.push(`export const components = {\n${componentExports}\n}`)
     }
 
-    const result = await compile(`${exports.join('\n')}\n${mdxContent}`, {
+    const fullContent = `${exports.join('\n')}\n\n${mdxContent}`
+
+    const result = await compile(fullContent, {
       jsx: true,
       outputFormat: 'function-body',
       ...compileOptions
