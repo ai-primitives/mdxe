@@ -1,0 +1,25 @@
+---
+title: MDX with Frontmatter
+description: Example of MDX file with frontmatter metadata
+keywords: mdx, frontmatter, metadata
+@viewport: width=device-width, initial-scale=1
+$revalidate: 3600
+---
+
+# {frontmatter.title}
+
+This example demonstrates frontmatter usage for App Router metadata.
+
+## Metadata Usage
+
+The frontmatter above exports:
+- title and description for SEO
+- keywords for meta tags
+- custom viewport configuration
+- revalidation time
+
+## Dynamic Content
+
+You can use frontmatter values in your content:
+- Title: {frontmatter.title}
+- Description: {frontmatter.description}

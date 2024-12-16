@@ -3,9 +3,16 @@
   "version": "1.2.0",
   "description": "Zero-Config Executable MDX",
   "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "bin": {
     "mdxe": "bin/cli.js"
   },
@@ -14,7 +21,7 @@
     "bin"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src",
@@ -39,7 +46,6 @@
   },
   "dependencies": {
     "@mdx-js/mdx": "^3.0.0",
-    "@mdx-js/react": "^3.0.0",
     "gray-matter": "^4.0.3",
     "next": "^14.0.0",
     "react": "^18.2.0",
@@ -47,18 +53,23 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@mdx-js/loader": "^3.1.0",
+    "@mdx-js/react": "^3.1.0",
     "@semantic-release/commit-analyzer": "^13.0.0",
     "@semantic-release/github": "^11.0.1",
     "@semantic-release/npm": "^12.0.1",
     "@semantic-release/release-notes-generator": "^14.0.1",
     "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^22.10.2",
+    "@types/node-fetch": "^2.6.12",
+    "@types/react": "^19.0.1",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "autoprefixer": "^10.4.20",
     "chokidar": "^4.0.1",
     "cosmiconfig": "^9.0.0",
     "eslint": "^9.17.0",
+    "node-fetch": "^3.3.2",
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
     "semantic-release": "^24.2.0",

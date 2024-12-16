@@ -1,11 +1,13 @@
-import { version } from '../../package.json'
-import { processMDX } from '../mdx/processor'
+import { processMDX } from '../mdx/processor.js'
 import { watch } from 'chokidar'
 import { resolve, extname, dirname } from 'path'
 import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
 import { spawn, type ChildProcess } from 'child_process'
-import type { MDXEConfig } from './config'
+import type { MDXEConfig } from './config.js'
+
+// Import package.json with type assertion for ESM compatibility
+const pkg = await import('../../package.json', { assert: { type: 'json' } })
 
 const explorer = cosmiconfig('mdxe')
 
@@ -14,12 +16,18 @@ interface CliOptions extends MDXEConfig {
   help?: boolean
 }
 
+// Utility function for consistent error handling
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 async function loadConfig(): Promise<MDXEConfig> {
   try {
     const result = await explorer.search()
     return result?.config || {}
   } catch (error) {
-    console.warn('Failed to load config:', error)
+    const errorMessage = formatError(error)
+    console.warn('Failed to load config:', errorMessage)
     return {}
   }
 }
@@ -60,7 +68,8 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
     console.log('Processed:', filepath)
     return result
   } catch (error) {
-    console.error('Error processing file:', error)
+    const errorMessage = formatError(error)
+    console.error('Error processing file:', errorMessage)
     process.exit(1)
   }
 }
@@ -73,7 +82,8 @@ function startNextDev(config: MDXEConfig) {
   })
 
   nextProcess.on('error', (error) => {
-    console.error('Failed to start Next.js dev server:', error)
+    const errorMessage = formatError(error)
+    console.error('Failed to start Next.js dev server:', errorMessage)
     process.exit(1)
   })
 
@@ -109,7 +119,7 @@ Configuration:
 }
 
 export function showVersion(): void {
-  console.log(`v${version}`)
+  console.log(`v${pkg.default.version}`)
 }
 
 export async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
@@ -150,15 +160,42 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   if (isDirectory || config.watch?.enabled) {
     const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
+    const absolutePatterns = patterns.map(p => resolve(process.cwd(), p))
 
-    const watcher = watch(patterns, {
+    console.log('Starting watcher with patterns:', absolutePatterns)
+    const watcher = watch(absolutePatterns, {
       ignored: config.watch?.ignore,
       persistent: true,
+      ignoreInitial: false,
+      cwd: process.cwd(),
     })
 
     console.log('Watching for changes...')
-    watcher.on('add', (file) => processMDXFile(file, config))
-    watcher.on('change', (file) => processMDXFile(file, config))
+    watcher.on('ready', () => console.log('Initial scan complete'))
+    watcher.on('add', async (file) => {
+      const absolutePath = resolve(process.cwd(), file)
+      console.log(`File ${absolutePath} has been added`)
+      try {
+        await processMDXFile(absolutePath, config)
+      } catch (error) {
+        const errorMessage = formatError(error)
+        console.error(`Error processing added file: ${errorMessage}`)
+      }
+    })
+    watcher.on('change', async (file) => {
+      const absolutePath = resolve(process.cwd(), file)
+      console.log(`File ${absolutePath} has been changed`)
+      try {
+        await processMDXFile(absolutePath, config)
+      } catch (error) {
+        const errorMessage = formatError(error)
+        console.error(`Error processing changed file: ${errorMessage}`)
+      }
+    })
+    watcher.on('error', (error) => {
+      const errorMessage = formatError(error)
+      console.error('Watcher error:', errorMessage)
+    })
 
     // Handle cleanup
     process.on('SIGINT', () => {

@@ -2,7 +2,7 @@ import { compile } from '@mdx-js/mdx'
 import matter from 'gray-matter'
 import { readFileSync } from 'fs'
 import type { CompileOptions } from '@mdx-js/mdx'
-import { resolveRemoteImport, fetchRemoteComponent } from './remote'
+import { resolveRemoteImport, fetchRemoteComponent } from './remote.js'
 
 interface MDXProcessorOptions {
   filepath: string

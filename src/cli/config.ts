@@ -25,6 +25,15 @@ export interface MDXEConfig {
     /** Next.js project directory */
     dir?: string
   }
+  /** Style configuration */
+  styles?: {
+    /** Content width (default: 65ch) */
+    contentWidth?: string
+    /** Custom CSS variables */
+    variables?: Record<string, string>
+    /** Additional Tailwind classes */
+    additionalClasses?: string[]
+  }
 }
 
 /**

@@ -1,0 +1,31 @@
+---
+title: Remote Component Imports
+---
+
+import { Button } from '@chakra-ui/react'
+import { motion } from 'framer-motion'
+
+# Remote Component Imports
+
+This example demonstrates importing components from npm packages via esm.sh.
+
+## Chakra UI Button
+
+<Button colorScheme="blue">Chakra Button</Button>
+
+## Framer Motion
+
+<motion.div
+  animate={{ x: 100 }}
+  transition={{ duration: 2 }}
+>
+  Animated Text
+</motion.div>
+
+The imports are automatically converted to esm.sh URLs:
+```jsx
+// Original import
+import { Button } from '@chakra-ui/react'
+// Converted to
+import { Button } from 'https://esm.sh/@chakra-ui/react'
+```

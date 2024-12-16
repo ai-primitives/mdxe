@@ -9,6 +9,7 @@ interface RemoteImportOptions {
 }
 
 const CACHE_DIR = path.join(os.tmpdir(), 'mdxe-remote-cache')
+const FILE_EXTENSIONS = ['.tsx', '.jsx', '.ts', '.js']
 
 export async function resolveRemoteImport({ url, version }: RemoteImportOptions): Promise<string> {
   // Handle esm.sh URLs
@@ -24,8 +25,25 @@ export async function resolveRemoteImport({ url, version }: RemoteImportOptions)
   return `${baseUrl}/${packageName}${versionSuffix}`
 }
 
-export async function fetchRemoteComponent(url: string): Promise<string> {
-  // Create cache directory if it doesn't exist
+export async function fetchRemoteComponent(url: string, baseDir?: string): Promise<string> {
+  // Handle local file imports
+  if (baseDir && (url.startsWith('./') || url.startsWith('../'))) {
+    // Try each extension until we find a matching file
+    for (const ext of FILE_EXTENSIONS) {
+      const filePath = path.join(baseDir, url + ext)
+      try {
+        const stats = await fs.stat(filePath)
+        if (stats.isFile()) {
+          return await fs.readFile(filePath, 'utf-8')
+        }
+      } catch {
+        continue // File doesn't exist with this extension, try next
+      }
+    }
+    throw new Error(`Local component not found: ${url} in ${baseDir}`)
+  }
+
+  // Handle remote components
   await fs.mkdir(CACHE_DIR, { recursive: true })
 
   // Generate cache key from URL

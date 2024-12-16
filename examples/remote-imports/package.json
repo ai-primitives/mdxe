@@ -1,0 +1,13 @@
+{
+  "name": "mdxe-remote-imports-example",
+  "private": true,
+  "mdxe": {
+    "imports": {
+      "baseUrl": "https://esm.sh/",
+      "aliases": {
+        "@chakra-ui/react": "@chakra-ui/react@2.8.0",
+        "framer-motion": "framer-motion@10.16.4"
+      }
+    }
+  }
+}

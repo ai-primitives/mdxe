@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .theme-container {
+    @apply min-h-screen p-8;
+    background-color: var(--theme-bg, white);
+    color: var(--theme-text, #1f2937);
+  }
+
+  .custom-container {
+    @apply max-w-4xl mx-auto space-y-8;
+  }
+
+  .grid-layout {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-6 mt-8;
+  }
+
+  .theme-card {
+    @apply p-6 rounded-lg shadow-md;
+    background-color: var(--theme-primary, #3b82f6);
+    color: white;
+  }
+
+  .theme-card h3 {
+    @apply text-xl font-bold mb-2;
+  }
+
+  .theme-card p {
+    @apply text-sm opacity-90;
+  }
+
+  .space-y-4 {
+    @apply flex flex-col gap-4;
+  }
+}

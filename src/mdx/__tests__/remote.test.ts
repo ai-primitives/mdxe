@@ -90,4 +90,45 @@ describe('fetchRemoteComponent', () => {
 
     await expect(fetchRemoteComponent(url)).rejects.toThrow('Failed to fetch remote component')
   })
+
+  it('should handle relative file imports', async () => {
+    const baseDir = '/test/dir'
+    const relativePath = './components/Button'
+    const absolutePath = path.join(baseDir, 'components/Button.tsx')
+    const localContent = 'export default function Button() { return <button>Click me</button> }'
+
+    vi.mocked(fs.stat).mockResolvedValueOnce({
+      isFile: () => true,
+      mtimeMs: Date.now(),
+    } as unknown as Stats)
+    vi.mocked(fs.readFile).mockResolvedValueOnce(localContent)
+
+    const result = await fetchRemoteComponent(relativePath, baseDir)
+
+    expect(result).toBe(localContent)
+    expect(fs.readFile).toHaveBeenCalledWith(absolutePath, 'utf-8')
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('should resolve local file extensions', async () => {
+    const baseDir = '/test/dir'
+    const relativePath = './components/Button'
+
+    // Simulate file not found for first few extensions
+    vi.mocked(fs.stat).mockRejectedValueOnce(new Error('not found')) // .tsx
+    vi.mocked(fs.stat).mockRejectedValueOnce(new Error('not found')) // .jsx
+    vi.mocked(fs.stat).mockResolvedValueOnce({
+      // .ts
+      isFile: () => true,
+      mtimeMs: Date.now(),
+    } as unknown as Stats)
+
+    const localContent = 'export const Button = () => <button>Click</button>'
+    vi.mocked(fs.readFile).mockResolvedValueOnce(localContent)
+
+    const result = await fetchRemoteComponent(relativePath, baseDir)
+
+    expect(result).toBe(localContent)
+    expect(fs.readFile).toHaveBeenCalledWith(path.join(baseDir, 'components/Button.ts'), 'utf-8')
+  })
 })
