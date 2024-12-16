@@ -1,24 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resolveRemoteImport, fetchRemoteComponent } from '../remote'
-import { promises as fs } from 'fs'
+import { promises as fs, Stats } from 'fs'
 import path from 'path'
 import os from 'os'
-
-// Add type for global fetch
-declare global {
-  var fetch: (url: string) => Promise<Response>
-}
 
 vi.mock('fs', () => ({
   promises: {
     mkdir: vi.fn(),
     stat: vi.fn(),
     readFile: vi.fn(),
-    writeFile: vi.fn()
-  }
+    writeFile: vi.fn(),
+  },
 }))
-
-global.fetch = vi.fn()
 
 describe('resolveRemoteImport', () => {
   it('should return existing esm.sh URLs unchanged', async () => {
@@ -44,17 +37,17 @@ describe('fetchRemoteComponent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(global.fetch as any).mockReset()
+    vi.spyOn(globalThis, 'fetch').mockReset()
   })
 
   it('should fetch and cache remote components', async () => {
-    ;(global.fetch as any).mockResolvedValueOnce({
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
-      text: () => Promise.resolve(mockContent)
-    })
+      text: () => Promise.resolve(mockContent),
+    } as Response)
 
     // Simulate cache miss
-    ;(fs.stat as any).mockRejectedValueOnce(new Error('not found'))
+    vi.mocked(fs.stat).mockRejectedValueOnce(new Error('not found'))
 
     const result = await fetchRemoteComponent(url)
 
@@ -64,36 +57,36 @@ describe('fetchRemoteComponent', () => {
   })
 
   it('should use cached content when available and fresh', async () => {
-    ;(fs.stat as any).mockResolvedValueOnce({
-      mtimeMs: Date.now() - 1000 // 1 second old
-    })
-    ;(fs.readFile as any).mockResolvedValueOnce(mockContent)
+    vi.mocked(fs.stat).mockResolvedValueOnce({
+      mtimeMs: Date.now() - 1000, // 1 second old
+    } as Stats)
+    vi.mocked(fs.readFile).mockResolvedValueOnce(mockContent)
 
     const result = await fetchRemoteComponent(url)
 
     expect(result).toBe(mockContent)
-    expect(global.fetch).not.toHaveBeenCalled()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   it('should refetch when cache is stale', async () => {
-    ;(fs.stat as any).mockResolvedValueOnce({
-      mtimeMs: Date.now() - 25 * 60 * 60 * 1000 // 25 hours old
-    })
-    ;(global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(fs.stat).mockResolvedValueOnce({
+      mtimeMs: Date.now() - 25 * 60 * 60 * 1000, // 25 hours old
+    } as Stats)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
-      text: () => Promise.resolve(mockContent)
-    })
+      text: () => Promise.resolve(mockContent),
+    } as Response)
 
     await fetchRemoteComponent(url)
 
-    expect(global.fetch).toHaveBeenCalledWith(url)
+    expect(globalThis.fetch).toHaveBeenCalledWith(url)
   })
 
   it('should throw error on failed fetch', async () => {
-    ;(fs.stat as any).mockRejectedValueOnce(new Error('not found'))
-    ;(global.fetch as any).mockResolvedValueOnce({
-      ok: false
-    })
+    vi.mocked(fs.stat).mockRejectedValueOnce(new Error('not found'))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: false,
+    } as Response)
 
     await expect(fetchRemoteComponent(url)).rejects.toThrow('Failed to fetch remote component')
   })

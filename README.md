@@ -24,6 +24,7 @@ pnpm add mdxe
 ## Usage
 
 ### CLI Mode
+
 ```bash
 # Process single file
 mdxe myfile.mdx
@@ -36,6 +37,7 @@ mdxe dev
 ```
 
 ### NextJS Plugin
+
 ```javascript
 // next.config.js
 import { withMDXE } from 'mdxe/next'
@@ -46,10 +48,11 @@ export default withMDXE({
 ```
 
 ### MDX Exports
+
 ```mdx
 export const layout = './layouts/BlogPost'
 export const components = {
-  Button: './components/Button'
+  Button: './components/Button',
 }
 
 # My Content
@@ -58,6 +61,7 @@ export const components = {
 ## Configuration
 
 Configure via package.json:
+
 ```json
 {
   "mdxe": {
@@ -68,10 +72,11 @@ Configure via package.json:
 ```
 
 Or mdxe.config.js:
+
 ```javascript
 export default {
   layouts: './layouts',
-  components: './components'
+  components: './components',
 }
 ```
 

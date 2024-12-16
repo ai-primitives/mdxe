@@ -4,7 +4,7 @@ import { resolveRemoteImport, fetchRemoteComponent } from '../remote'
 
 vi.mock('../remote', () => ({
   resolveRemoteImport: vi.fn(),
-  fetchRemoteComponent: vi.fn()
+  fetchRemoteComponent: vi.fn(),
 }))
 
 describe('processMDX', () => {
@@ -20,7 +20,7 @@ title: Test
 # Hello World
     `
     const mockComponents = {
-      Button: 'react-button'
+      Button: 'react-button',
     }
 
     ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce('https://esm.sh/react-button@1.0.0')
@@ -29,7 +29,7 @@ title: Test
     const result = await processMDX({
       filepath: 'test.mdx',
       content: mockContent,
-      components: mockComponents
+      components: mockComponents,
     })
 
     expect(result.code).toContain('export default function Button()')
@@ -47,7 +47,7 @@ title: Test
     const result = await processMDX({
       filepath: 'test.mdx',
       content: mockContent,
-      layout: mockLayout
+      layout: mockLayout,
     })
 
     expect(result.code).toContain('export default function BlogLayout()')
@@ -58,7 +58,7 @@ title: Test
   it('should handle direct URLs for components', async () => {
     const mockContent = '# Hello World'
     const mockComponents = {
-      Button: 'https://esm.sh/react-button@1.0.0'
+      Button: 'https://esm.sh/react-button@1.0.0',
     }
 
     ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function Button() {}')
@@ -66,7 +66,7 @@ title: Test
     const result = await processMDX({
       filepath: 'test.mdx',
       content: mockContent,
-      components: mockComponents
+      components: mockComponents,
     })
 
     expect(result.code).toContain('export default function Button()')

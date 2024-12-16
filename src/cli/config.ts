@@ -1,4 +1,5 @@
 import type { CompileOptions } from '@mdx-js/mdx'
+import { cosmiconfig } from 'cosmiconfig'
 
 export interface MDXEConfig {
   /** MDX compilation options */
@@ -24,4 +25,14 @@ export interface MDXEConfig {
     /** Next.js project directory */
     dir?: string
   }
+}
+
+/**
+ * Load configuration from package.json or mdxe.config.js
+ * Uses cosmiconfig for zero-config with reasonable defaults
+ */
+export async function loadConfig(): Promise<MDXEConfig> {
+  const explorer = cosmiconfig('mdxe')
+  const result = await explorer.search()
+  return result?.config ?? {}
 }

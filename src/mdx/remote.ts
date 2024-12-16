@@ -6,12 +6,11 @@ import os from 'os'
 interface RemoteImportOptions {
   url: string
   version?: string
-  cache?: boolean
 }
 
 const CACHE_DIR = path.join(os.tmpdir(), 'mdxe-remote-cache')
 
-export async function resolveRemoteImport({ url, version, cache = true }: RemoteImportOptions): Promise<string> {
+export async function resolveRemoteImport({ url, version }: RemoteImportOptions): Promise<string> {
   // Handle esm.sh URLs
   if (url.startsWith('https://esm.sh/')) {
     return url // Already in correct format
@@ -42,12 +41,12 @@ export async function fetchRemoteComponent(url: string): Promise<string> {
     if (cacheAge < 24 * 60 * 60 * 1000) {
       return await fs.readFile(cachePath, 'utf-8')
     }
-  } catch (error) {
+  } catch {
     // Cache miss or error, proceed with fetch
   }
 
   // Fetch remote component
-  const response = await fetch(url)
+  const response = await globalThis.fetch(url)
   if (!response.ok) {
     throw new Error(`Failed to fetch remote component: ${url}`)
   }

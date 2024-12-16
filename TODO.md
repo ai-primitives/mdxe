@@ -3,6 +3,7 @@
 ## Core Features
 
 - [ ] MDX Processing
+
   - [ ] Basic MDX compilation
   - [ ] Layout exports support
   - [ ] Component exports support
@@ -10,6 +11,7 @@
   - [ ] Frontmatter metadata extraction
 
 - [ ] NextJS Integration
+
   - [ ] Plugin mode implementation
   - [ ] Standalone CLI mode
   - [ ] App Router metadata support
@@ -18,6 +20,7 @@
   - [ ] Production server (next start)
 
 - [ ] CLI Implementation
+
   - [ ] File processing
   - [ ] Directory processing
   - [ ] Watch mode
@@ -31,6 +34,7 @@
   - [ ] Custom style overrides
 
 ## Documentation
+
 - [x] Update README with new features
 - [x] Document CLI usage
 - [x] Document NextJS integration
@@ -42,7 +46,14 @@
   - [ ] Configuration
 
 ## Testing
+
 - [ ] Core MDX processing
+  - [ ] Test environment setup
+    - [ ] TypeScript configuration
+    - [ ] Vitest mock types
+    - [ ] Global declarations
+  - [ ] Remote component fetching
+  - [ ] Cache implementation
 - [ ] NextJS integration
 - [ ] CLI functionality
 - [ ] Watch mode
