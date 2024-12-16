@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
 import { spawn } from 'child_process'
 import { join } from 'path'
-import { writeFileSync, mkdirSync, rmSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import fetch from 'node-fetch'
-import { setTimeout } from 'node:timers/promises'
+import { sleep } from '../../test/setup'
 
 describe('Watch Mode', () => {
   const testDir = join(process.cwd(), 'test-watch-mode')
@@ -11,7 +11,10 @@ describe('Watch Mode', () => {
   const multiDir = join(testDir, 'content')
   let watchProcess: ReturnType<typeof spawn>
 
-  beforeAll(() => {
+  // Add debug logging
+  const debug = (msg: string) => console.log(`[Watch Test Debug] ${msg}`)
+
+  beforeEach(() => {
     // Create test directories
     mkdirSync(testDir, { recursive: true })
     mkdirSync(multiDir, { recursive: true })
@@ -51,7 +54,12 @@ module.exports = withMDXE({})
     )
   })
 
-  afterAll(() => {
+  afterEach(() => {
+    if (watchProcess) {
+      watchProcess.kill()
+      // Ensure child processes are cleaned up
+      process.kill(-watchProcess.pid!, 'SIGKILL')
+    }
     rmSync(testDir, { recursive: true, force: true })
   })
 
@@ -69,15 +77,19 @@ module.exports = withMDXE({})
     let hasProcessedFile = false
     watchProcess.stdout.on('data', (data) => {
       const output = data.toString()
+      debug(`Single file output: ${output}`)
       if (output.includes('Processed:') && output.includes('test.mdx')) {
         hasProcessedFile = true
+        debug('Detected file processing')
       }
     })
 
     // Wait for initial processing
-    await setTimeout(2000)
+    debug('Waiting for initial processing...')
+    await sleep(5000)
 
     // Modify the file
+    debug('Modifying test file...')
     writeFileSync(
       singleFile,
       `
@@ -87,10 +99,9 @@ Updated content
     )
 
     // Wait for file change detection and verify processing
-    await setTimeout(2000)
+    debug('Waiting for file change detection...')
+    await sleep(10000)
     expect(hasProcessedFile).toBe(true)
-
-    watchProcess.kill()
   })
 
   it('should detect changes in directory mode', async () => {
@@ -107,15 +118,19 @@ Updated content
     let hasProcessedFiles = false
     watchProcess.stdout.on('data', (data) => {
       const output = data.toString()
+      debug(`Directory mode output: ${output}`)
       if (output.includes('Processed:') && output.includes('page1.mdx') && output.includes('page3.mdx')) {
         hasProcessedFiles = true
+        debug('Detected directory processing')
       }
     })
 
     // Wait for initial processing
-    await setTimeout(2000)
+    debug('Waiting for initial processing...')
+    await sleep(5000)
 
     // Modify existing file
+    debug('Modifying page1.mdx...')
     writeFileSync(
       join(multiDir, 'page1.mdx'),
       `
@@ -125,6 +140,7 @@ Updated content for page 1
     )
 
     // Add new file
+    debug('Adding page3.mdx...')
     writeFileSync(
       join(multiDir, 'page3.mdx'),
       `
@@ -134,10 +150,9 @@ New page content
     )
 
     // Wait for file change detection and verify processing
-    await setTimeout(2000)
+    debug('Waiting for file change detection...')
+    await sleep(10000)
     expect(hasProcessedFiles).toBe(true)
-
-    watchProcess.kill()
   })
 
   it('should work with next dev', async () => {
@@ -168,11 +183,13 @@ Testing next dev integration
     }
     watchProcess.stdout.on('data', (data) => {
       const output = data.toString()
+      debug(`Next dev output: ${output}`)
       expect(output).toContain('Watch Mode Test')
     })
 
     // Wait for Next.js dev server to start
-    await setTimeout(5000)
+    debug('Waiting for Next.js dev server to start...')
+    await sleep(5000)
 
     // Test initial page load
     const response = await fetch(`http://localhost:${port}`)
@@ -180,6 +197,7 @@ Testing next dev integration
     expect(html).toContain('Watch Mode Test')
 
     // Modify the page
+    debug('Modifying index.mdx...')
     writeFileSync(
       join(testDir, 'pages', 'index.mdx'),
       `
@@ -189,13 +207,12 @@ Updated content for testing
     )
 
     // Wait for hot reload
-    await setTimeout(2000)
+    debug('Waiting for hot reload...')
+    await sleep(5000)
 
     // Test updated content
     const updatedResponse = await fetch(`http://localhost:${port}`)
     const updatedHtml = await updatedResponse.text()
     expect(updatedHtml).toContain('Updated content for testing')
-
-    watchProcess.kill()
   })
 })
