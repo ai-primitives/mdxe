@@ -2,35 +2,35 @@
 
 ## Core Features
 
-- [ ] MDX Processing
+- [x] MDX Processing
 
-  - [ ] Basic MDX compilation
-  - [ ] Layout exports support
-  - [ ] Component exports support
-  - [ ] Remote component imports
-  - [ ] Frontmatter metadata extraction
+  - [x] Basic MDX compilation
+  - [x] Layout exports support
+  - [x] Component exports support
+  - [x] Remote component imports
+  - [x] Frontmatter metadata extraction
 
-- [ ] NextJS Integration
+- [x] NextJS Integration
 
-  - [ ] Plugin mode implementation
-  - [ ] Standalone CLI mode
-  - [ ] App Router metadata support
-  - [ ] Development server (next dev)
+  - [x] Plugin mode implementation
+  - [x] Standalone CLI mode
+  - [x] App Router metadata support
+  - [x] Development server (next dev)
   - [ ] Production build (next build)
   - [ ] Production server (next start)
 
-- [ ] CLI Implementation
+- [x] CLI Implementation
 
-  - [ ] File processing
-  - [ ] Directory processing
-  - [ ] Watch mode
-  - [ ] Configuration support
-    - [ ] package.json config
-    - [ ] mdxe.config.js support
+  - [x] File processing
+  - [x] Directory processing
+  - [x] Watch mode
+  - [x] Configuration support
+    - [x] package.json config
+    - [x] mdxe.config.js support
 
 - [ ] Styling
-  - [ ] Tailwind Typography integration
-  - [ ] Default styles
+  - [x] Tailwind Typography integration
+  - [x] Default styles
   - [ ] Custom style overrides
 
 ## Documentation
@@ -48,10 +48,10 @@
 ## Testing
 
 - [ ] Core MDX processing
-  - [ ] Test environment setup
-    - [ ] TypeScript configuration
-    - [ ] Vitest mock types
-    - [ ] Global declarations
+  - [x] Test environment setup
+    - [x] TypeScript configuration
+    - [x] Vitest mock types
+    - [x] Global declarations
   - [ ] Remote component fetching
   - [ ] Cache implementation
 - [ ] NextJS integration
