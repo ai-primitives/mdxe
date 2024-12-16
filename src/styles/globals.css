@@ -2,15 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --mdxe-content-width: 65ch;
+  --mdxe-heading-color: theme(colors.gray.900);
+  --mdxe-text-color: theme(colors.gray.700);
+  --mdxe-link-color: theme(colors.blue.600);
+  --mdxe-code-bg: theme(colors.gray.100);
+  --mdxe-code-color: theme(colors.gray.800);
+  --mdxe-pre-bg: theme(colors.gray.100);
+  --mdxe-pre-color: theme(colors.gray.800);
+}
+
+:root.dark {
+  --mdxe-heading-color: theme(colors.gray.100);
+  --mdxe-text-color: theme(colors.gray.300);
+  --mdxe-link-color: theme(colors.blue.400);
+  --mdxe-code-bg: theme(colors.gray.900);
+  --mdxe-code-color: theme(colors.gray.200);
+  --mdxe-pre-bg: theme(colors.gray.900);
+  --mdxe-pre-color: theme(colors.gray.200);
+}
+
 .prose {
   @apply max-w-none;
+  color: var(--mdxe-text-color);
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  color: var(--mdxe-heading-color);
+}
+
+.prose a {
+  color: var(--mdxe-link-color);
 }
 
 .prose pre {
-  @apply bg-gray-100 dark:bg-gray-900;
+  background-color: var(--mdxe-pre-bg);
+  color: var(--mdxe-pre-color);
 }
 
 .prose code {
-  @apply text-gray-800 dark:text-gray-200 px-1 py-0.5 rounded;
-  @apply bg-gray-100 dark:bg-gray-900;
+  background-color: var(--mdxe-code-bg);
+  color: var(--mdxe-code-color);
+  @apply px-1 py-0.5 rounded;
 }
