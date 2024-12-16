@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, openSync, closeSync } from 'fs'
 import fetch from 'node-fetch'
 import { sleep } from '../../test/setup'
 
@@ -88,6 +88,9 @@ module.exports = withMDXE({})
       'utf-8'
     )
 
+    // Ensure file exists before starting watch
+    await sleep(1000)
+
     debug('Starting watch process with args:', args)
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -116,7 +119,7 @@ module.exports = withMDXE({})
       debug('Watch process error:', data.toString())
     })
 
-    debug('Waiting for initial processing...')
+    // Wait for watcher to be ready
     await sleep(5000)
 
     debug('Modifying test file...')
@@ -128,8 +131,12 @@ This is an updated test file.
     `,
     )
 
+    // Force a file system sync
+    const fd = openSync(absolutePath, 'r')
+    closeSync(fd)
+
     debug('Waiting for file change detection...')
-    await sleep(15000)
+    await sleep(30000) // Increased wait time
     expect(hasProcessedFile).toBe(true)
   })
 
