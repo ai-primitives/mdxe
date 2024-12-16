@@ -1,0 +1,24 @@
+---
+title: Using Custom Layouts
+description: Example of MDX file with a custom layout component
+---
+
+export const layout = 'CustomLayout'
+
+# Custom Layout Example
+
+This MDX file uses a custom layout component that:
+1. Centers content
+2. Adds padding
+3. Uses frontmatter for title/description
+4. Applies Tailwind Typography
+
+## How It Works
+
+The `layout` export tells mdxe which layout to use:
+
+```jsx
+export const layout = 'CustomLayout'
+```
+
+The layout receives frontmatter metadata automatically.

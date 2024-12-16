@@ -17,11 +17,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "jsx": "react",
+    "types": ["react", "node"]
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    "examples/**/*.ts",
+    "examples/**/*.tsx"
   ],
   "exclude": ["node_modules", "dist"]
 }

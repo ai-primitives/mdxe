@@ -1,0 +1,31 @@
+---
+title: Component Usage in MDX
+---
+
+import Button from './custom-button'
+
+export const components = {
+  Button
+}
+
+# Using Components in MDX
+
+This example shows how to use custom components in MDX files.
+
+## Local Components
+
+Using a locally imported button:
+
+<Button>Click Me!</Button>
+
+## Exported Components
+
+The `components` export makes components available globally:
+
+```jsx
+export const components = {
+  Button
+}
+```
+
+Now other MDX files can use these components without importing.
