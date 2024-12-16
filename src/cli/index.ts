@@ -16,12 +16,17 @@ interface CliOptions extends MDXEConfig {
   help?: boolean
 }
 
+// Utility function for consistent error handling
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 async function loadConfig(): Promise<MDXEConfig> {
   try {
     const result = await explorer.search()
     return result?.config || {}
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorMessage = formatError(error)
     console.warn('Failed to load config:', errorMessage)
     return {}
   }
@@ -63,7 +68,7 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
     console.log('Processed:', filepath)
     return result
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorMessage = formatError(error)
     console.error('Error processing file:', errorMessage)
     process.exit(1)
   }
@@ -77,7 +82,7 @@ function startNextDev(config: MDXEConfig) {
   })
 
   nextProcess.on('error', (error) => {
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorMessage = formatError(error)
     console.error('Failed to start Next.js dev server:', errorMessage)
     process.exit(1)
   })
@@ -173,7 +178,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
+        const errorMessage = formatError(error)
         console.error(`Error processing added file: ${errorMessage}`)
       }
     })
@@ -183,12 +188,12 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
+        const errorMessage = formatError(error)
         console.error(`Error processing changed file: ${errorMessage}`)
       }
     })
     watcher.on('error', (error) => {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorMessage = formatError(error)
       console.error('Watcher error:', errorMessage)
     })
 
