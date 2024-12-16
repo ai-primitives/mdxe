@@ -1,44 +1,49 @@
 # Project Status and Tasks
 
-## Setup and Configuration
+## Core Features
 
-- [x] Initialize package with TypeScript configuration
-- [x] Set up Vitest for testing
-- [x] Configure ESLint and Prettier
-- [x] Set up basic project structure
-- [x] Create placeholder implementation and tests
-- [x] Configure package.json with proper metadata
+- [ ] MDX Processing
+  - [ ] Basic MDX compilation
+  - [ ] Layout exports support
+  - [ ] Component exports support
+  - [ ] Remote component imports
+  - [ ] Frontmatter metadata extraction
 
-## Implementation
-- [x] Basic package structure
-  - [x] TypeScript configuration
-  - [x] Testing setup with Vitest
-  - [x] ESLint and Prettier configuration
-- [x] CLI functionality
-  - [x] Basic command-line interface
-  - [x] Version and help commands
-- [ ] Advanced features
-  - [ ] Additional CLI commands
-  - [ ] Extended test coverage
-  - [ ] Documentation examples
+- [ ] NextJS Integration
+  - [ ] Plugin mode implementation
+  - [ ] Standalone CLI mode
+  - [ ] App Router metadata support
+  - [ ] Development server (next dev)
+  - [ ] Production build (next build)
+  - [ ] Production server (next start)
+
+- [ ] CLI Implementation
+  - [ ] File processing
+  - [ ] Directory processing
+  - [ ] Watch mode
+  - [ ] Configuration support
+    - [ ] package.json config
+    - [ ] mdxe.config.js support
+
+- [ ] Styling
+  - [ ] Tailwind Typography integration
+  - [ ] Default styles
+  - [ ] Custom style overrides
 
 ## Documentation
+- [x] Update README with new features
+- [x] Document CLI usage
+- [x] Document NextJS integration
+- [ ] Add examples
+  - [ ] Basic MDX processing
+  - [ ] Layout usage
+  - [ ] Component exports
+  - [ ] Remote imports
+  - [ ] Configuration
 
-- [x] Create README with badges and usage instructions
-- [ ] Complete CONTRIBUTING.md guide
-- [ ] Add API documentation
-- [ ] Add examples directory with usage examples
-
-## CI/CD
-
-- [ ] Set up GitHub Actions workflow
-- [ ] Configure semantic-release
-- [ ] Add test coverage reporting
-- [ ] Set up automated npm publishing
-
-## Future Enhancements
-
-- [ ] Add more comprehensive examples
-- [ ] Add changelog generation
-- [ ] Add pull request template
-- [ ] Add issue templates
+## Testing
+- [ ] Core MDX processing
+- [ ] NextJS integration
+- [ ] CLI functionality
+- [ ] Watch mode
+- [ ] Configuration parsing
