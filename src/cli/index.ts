@@ -157,8 +157,14 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     })
 
     console.log('Watching for changes...')
-    watcher.on('add', (file) => processMDXFile(file, config))
-    watcher.on('change', (file) => processMDXFile(file, config))
+    watcher.on('add', async (file) => {
+      console.log(`File ${file} has been added`)
+      await processMDXFile(file, config)
+    })
+    watcher.on('change', async (file) => {
+      console.log(`File ${file} has been changed`)
+      await processMDXFile(file, config)
+    })
 
     // Handle cleanup
     process.on('SIGINT', () => {

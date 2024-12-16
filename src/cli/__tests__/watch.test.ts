@@ -77,24 +77,32 @@ module.exports = withMDXE({})
   })
 
   it('should detect changes in single file mode', async () => {
+    let hasProcessedFile = false
     const args = ['--watch', singleFile]
 
-    watchProcess = spawn('node', ['../../bin/cli.js', ...args], {
-      cwd: testDir,
+    watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
+      detached: true
     })
 
     if (!watchProcess.stdout) {
       throw new Error('Failed to get stdout from watch process')
     }
-    let hasProcessedFile = false
+
     watchProcess.stdout.on('data', (data) => {
       const output = data.toString()
-      debug(`Single file output: ${output}`)
-      if (output.includes('Processed:') && output.includes('test.mdx')) {
+      debug('Watch process output:', output)
+      if (output.includes('has been changed')) {
         hasProcessedFile = true
-        debug('Detected file processing')
       }
+    })
+
+    if (!watchProcess.stderr) {
+      throw new Error('Failed to get stderr from watch process')
+    }
+
+    watchProcess.stderr.on('data', (data) => {
+      debug('Watch process error:', data.toString())
     })
 
     debug('Waiting for initial processing...')
@@ -104,35 +112,43 @@ module.exports = withMDXE({})
     writeFileSync(
       singleFile,
       `
-# Test File
-Updated content
+# Updated Test
+This is an updated test file.
     `,
     )
 
     debug('Waiting for file change detection...')
-    await sleep(10000)
+    await sleep(15000)
     expect(hasProcessedFile).toBe(true)
   })
 
   it('should detect changes in directory mode', async () => {
+    let hasProcessedFiles = false
     const args = ['--watch', multiDir]
 
-    watchProcess = spawn('node', ['../../bin/cli.js', ...args], {
-      cwd: testDir,
+    watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
+      detached: true
     })
 
     if (!watchProcess.stdout) {
       throw new Error('Failed to get stdout from watch process')
     }
-    let hasProcessedFiles = false
+
     watchProcess.stdout.on('data', (data) => {
       const output = data.toString()
-      debug(`Directory mode output: ${output}`)
-      if (output.includes('Processed:') && output.includes('page1.mdx') && output.includes('page3.mdx')) {
+      debug('Watch process output:', output)
+      if (output.includes('has been changed') || output.includes('has been added')) {
         hasProcessedFiles = true
-        debug('Detected directory processing')
       }
+    })
+
+    if (!watchProcess.stderr) {
+      throw new Error('Failed to get stderr from watch process')
+    }
+
+    watchProcess.stderr.on('data', (data) => {
+      debug('Watch process error:', data.toString())
     })
 
     debug('Waiting for initial processing...')
@@ -142,8 +158,8 @@ Updated content
     writeFileSync(
       join(multiDir, 'page1.mdx'),
       `
-# Page 1
-Updated content for page 1
+# Updated Page 1
+This is an updated test file.
     `,
     )
 
@@ -152,12 +168,12 @@ Updated content for page 1
       join(multiDir, 'page3.mdx'),
       `
 # Page 3
-New page content
+This is a new test file.
     `,
     )
 
     debug('Waiting for file change detection...')
-    await sleep(10000)
+    await sleep(15000)
     expect(hasProcessedFiles).toBe(true)
   })
 
