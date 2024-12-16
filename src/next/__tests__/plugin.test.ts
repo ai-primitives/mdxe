@@ -2,7 +2,6 @@ import { execSync } from 'child_process'
 import { expect, describe, it, beforeAll, afterAll } from 'vitest'
 import fs from 'fs'
 import path from 'path'
-import { withMDXE } from '../plugin'
 
 describe('Next.js Production Build', () => {
   const testDir = path.join(process.cwd(), 'test-next-build')

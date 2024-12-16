@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process'
+import { execSync, spawn, ChildProcess } from 'child_process'
 import { expect, describe, it, beforeAll, afterAll } from 'vitest'
 import fs from 'fs'
 import path from 'path'
@@ -8,7 +8,7 @@ import { setTimeout } from 'node:timers/promises'
 describe('Production Server', () => {
   const testDir = path.join(process.cwd(), 'test-next-server')
   const port = 3456
-  let serverProcess: any
+  let serverProcess: ChildProcess
 
   beforeAll(() => {
     // Create test directory and files
@@ -89,7 +89,7 @@ This page tests the production server functionality.
       expect(html).toContain('This page tests the production server functionality')
     } finally {
       // Cleanup
-      if (serverProcess) {
+      if (serverProcess && serverProcess.pid) {
         process.kill(-serverProcess.pid)
       }
       process.chdir(cwd)

@@ -113,7 +113,6 @@ describe('fetchRemoteComponent', () => {
   it('should resolve local file extensions', async () => {
     const baseDir = '/test/dir'
     const relativePath = './components/Button'
-    const extensions = ['.tsx', '.jsx', '.ts', '.js']
 
     // Simulate file not found for first few extensions
     vi.mocked(fs.stat).mockRejectedValueOnce(new Error('not found')) // .tsx

@@ -57,7 +57,6 @@ module.exports = withMDXE({})
 
   it('should detect changes in single file mode', async () => {
     const args = ['--watch', singleFile]
-    let output = ''
 
     watchProcess = spawn('node', ['../../bin/cli.js', ...args], {
       cwd: testDir,
@@ -67,8 +66,12 @@ module.exports = withMDXE({})
     if (!watchProcess.stdout) {
       throw new Error('Failed to get stdout from watch process')
     }
+    let hasProcessedFile = false
     watchProcess.stdout.on('data', (data) => {
-      output += data.toString()
+      const output = data.toString()
+      if (output.includes('Processed:') && output.includes('test.mdx')) {
+        hasProcessedFile = true
+      }
     })
 
     // Wait for initial processing
@@ -83,18 +86,15 @@ Updated content
     `,
     )
 
-    // Wait for file change detection
+    // Wait for file change detection and verify processing
     await setTimeout(2000)
-
-    expect(output).toContain('Processed:')
-    expect(output).toContain('test.mdx')
+    expect(hasProcessedFile).toBe(true)
 
     watchProcess.kill()
   })
 
   it('should detect changes in directory mode', async () => {
     const args = ['--watch', multiDir]
-    let output = ''
 
     watchProcess = spawn('node', ['../../bin/cli.js', ...args], {
       cwd: testDir,
@@ -104,8 +104,12 @@ Updated content
     if (!watchProcess.stdout) {
       throw new Error('Failed to get stdout from watch process')
     }
+    let hasProcessedFiles = false
     watchProcess.stdout.on('data', (data) => {
-      output += data.toString()
+      const output = data.toString()
+      if (output.includes('Processed:') && output.includes('page1.mdx') && output.includes('page3.mdx')) {
+        hasProcessedFiles = true
+      }
     })
 
     // Wait for initial processing
@@ -129,12 +133,9 @@ New page content
     `,
     )
 
-    // Wait for file change detection
+    // Wait for file change detection and verify processing
     await setTimeout(2000)
-
-    expect(output).toContain('Processed:')
-    expect(output).toContain('page1.mdx')
-    expect(output).toContain('page3.mdx')
+    expect(hasProcessedFiles).toBe(true)
 
     watchProcess.kill()
   })
@@ -142,7 +143,6 @@ New page content
   it('should work with next dev', async () => {
     const port = 3457
     const args = ['--watch', '--next', testDir]
-    let output = ''
 
     // Create pages directory for Next.js
     mkdirSync(join(testDir, 'pages'), { recursive: true })
@@ -167,7 +167,8 @@ Testing next dev integration
       throw new Error('Failed to get stdout from watch process')
     }
     watchProcess.stdout.on('data', (data) => {
-      output += data.toString()
+      const output = data.toString()
+      expect(output).toContain('Watch Mode Test')
     })
 
     // Wait for Next.js dev server to start
