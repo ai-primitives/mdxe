@@ -1,0 +1,39 @@
+import Button from '../components/custom-button'
+
+<div className="custom-container">
+  # Style Customization Demo
+
+  This example demonstrates MDX style customization using Tailwind CSS and CSS variables.
+
+  <div className="space-y-4">
+    <Button variant="primary">Primary Button</Button>
+    <Button variant="secondary">Secondary Button</Button>
+  </div>
+
+  <div className="grid-layout">
+    <div className="theme-card">
+      <h3>Theme Card 1</h3>
+      <p>Customizable with CSS variables</p>
+    </div>
+    <div className="theme-card">
+      <h3>Theme Card 2</h3>
+      <p>Responsive grid layout</p>
+    </div>
+    <div className="theme-card">
+      <h3>Theme Card 3</h3>
+      <p>Tailwind integration</p>
+    </div>
+  </div>
+</div>
+
+export default function Layout({ children }) {
+  return (
+    <div className="theme-container" style={{
+      '--theme-primary': '#3b82f6',
+      '--theme-secondary': '#10b981',
+      '--theme-accent': '#8b5cf6',
+    }}>
+      {children}
+    </div>
+  )
+}

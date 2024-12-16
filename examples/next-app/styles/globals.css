@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --theme-primary: #3b82f6;
+  --theme-secondary: #10b981;
+  --theme-accent: #8b5cf6;
+  --theme-bg: #ffffff;
+  --theme-text: #1f2937;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}

@@ -1,0 +1,37 @@
+import Button from '../../components/custom-button'
+
+export default function MDXDemo() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <h1 className="text-4xl font-bold text-primary mb-4">
+          MDX Style Customization Demo
+        </h1>
+
+        <div className="text-lg text-gray-700 mb-8">
+          Welcome to the MDX style customization demo. This page demonstrates how to use MDX with custom styling in Next.js.
+        </div>
+
+        <div className="space-y-4 mb-8">
+          <Button variant="primary">Primary Action</Button>
+          <Button variant="secondary">Secondary Action</Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-primary text-white rounded-lg p-6 shadow-md">
+            <h3 className="text-xl font-bold mb-2">Customizable Themes</h3>
+            <p className="text-sm opacity-90">Change colors using CSS variables</p>
+          </div>
+          <div className="bg-secondary text-white rounded-lg p-6 shadow-md">
+            <h3 className="text-xl font-bold mb-2">Tailwind Integration</h3>
+            <p className="text-sm opacity-90">Seamless utility classes</p>
+          </div>
+          <div className="bg-accent text-white rounded-lg p-6 shadow-md">
+            <h3 className="text-xl font-bold mb-2">Component Library</h3>
+            <p className="text-sm opacity-90">Reusable styled components</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
