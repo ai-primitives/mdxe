@@ -134,8 +134,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   const target = args[0]
   if (!target) {
-    console.error('Please provide a file or directory')
-    process.exit(1)
+    showHelp()  // Show help instead of error
+    return
   }
 
   // Handle file extension assumption

@@ -32,9 +32,9 @@ describe('CLI', () => {
     consoleSpy.mockRestore()
   })
 
-  it('should default to help when no arguments provided', () => {
+  it('should default to help when no arguments provided', async () => {
     const consoleSpy = vi.spyOn(console, 'log')
-    cli([])
+    await cli([])
     expect(consoleSpy).toHaveBeenCalled()
     consoleSpy.mockRestore()
   })
