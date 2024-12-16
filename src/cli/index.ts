@@ -28,17 +28,14 @@ async function resolveImports(content: string, config: MDXEConfig): Promise<stri
   const { imports } = config
   if (!imports?.baseUrl) return content
 
-  return content.replace(
-    /import\s+(?:{\s*([^}]+)\s*}|\s*([^'"]+)\s+)from\s+['"]([^'"]+)['"]/g,
-    (match, namedImports, defaultImport, path) => {
-      if (path.startsWith('.') || path.startsWith('/')) {
-        return match // Keep local imports unchanged
-      }
-      const baseUrl = imports.baseUrl?.replace(/\/$/, '') ?? 'https://esm.sh'
-      const resolvedPath = `${baseUrl}/${path}`
-      return `import ${namedImports ? `{ ${namedImports} }` : defaultImport} from '${resolvedPath}'`
+  return content.replace(/import\s+(?:{\s*([^}]+)\s*}|\s*([^'"]+)\s+)from\s+['"]([^'"]+)['"]/g, (match, namedImports, defaultImport, path) => {
+    if (path.startsWith('.') || path.startsWith('/')) {
+      return match // Keep local imports unchanged
     }
-  )
+    const baseUrl = imports.baseUrl?.replace(/\/$/, '') ?? 'https://esm.sh'
+    const resolvedPath = `${baseUrl}/${path}`
+    return `import ${namedImports ? `{ ${namedImports} }` : defaultImport} from '${resolvedPath}'`
+  })
 }
 
 async function processMDXFile(filepath: string, config: MDXEConfig) {
@@ -50,18 +47,15 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
 
   try {
     // Process imports first
-    const processedContent = await resolveImports(
-      readFileSync(filepath, 'utf-8'),
-      config
-    )
+    const processedContent = await resolveImports(readFileSync(filepath, 'utf-8'), config)
 
     const result = await processMDX({
       filepath,
       content: processedContent,
       compileOptions: {
         ...config.mdxOptions,
-        jsx: true // Ensure JSX is enabled for component imports
-      }
+        jsx: true, // Ensure JSX is enabled for component imports
+      },
     })
     console.log('Processed:', filepath)
     return result
@@ -75,7 +69,7 @@ function startNextDev(config: MDXEConfig) {
   const dir = config.next?.dir || '.'
   const nextProcess = spawn('next', ['dev', dir], {
     stdio: 'inherit',
-    shell: true
+    shell: true,
   })
 
   nextProcess.on('error', (error) => {
@@ -134,7 +128,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   const target = args[0]
   if (!target) {
-    showHelp()  // Show help instead of error
+    showHelp() // Show help instead of error
     return
   }
 
@@ -155,18 +149,16 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
   }
 
   if (isDirectory || config.watch?.enabled) {
-    const patterns = isDirectory
-      ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`]
-      : [filepath]
+    const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
 
     const watcher = watch(patterns, {
       ignored: config.watch?.ignore,
-      persistent: true
+      persistent: true,
     })
 
     console.log('Watching for changes...')
-    watcher.on('add', file => processMDXFile(file, config))
-    watcher.on('change', file => processMDXFile(file, config))
+    watcher.on('add', (file) => processMDXFile(file, config))
+    watcher.on('change', (file) => processMDXFile(file, config))
 
     // Handle cleanup
     process.on('SIGINT', () => {
