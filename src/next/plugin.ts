@@ -1,8 +1,8 @@
 import type { NextConfig } from 'next'
-import type { WebpackConfigContext } from 'next/dist/server/config-shared'
-import type { Configuration as WebpackConfig } from 'webpack'
-import { processMDX } from '../mdx/processor'
-import type { ProcessedMDX } from '../mdx/processor'
+import type { Configuration as WebpackConfig, RuleSetRule } from 'webpack'
+import type { NextJsWebpackConfig, WebpackConfigContext } from 'next/dist/server/config-shared'
+import { processMDX } from '../mdx/processor.js'
+import type { ProcessedMDX } from '../mdx/processor.js'
 import { fileURLToPath } from 'url'
 
 interface MDXEPluginOptions {
@@ -43,7 +43,10 @@ export function withMDXE(nextConfig: NextConfig = {}, pluginOptions: MDXEPluginO
         test: /\.mdx?$/,
         use: [
           // Use Next.js babel loader first
-          options.defaultLoaders.babel,
+          {
+            loader: options.defaultLoaders.babel.loader,
+            options: options.defaultLoaders.babel.options,
+          },
           {
             loader: '@mdx-js/loader',
             options: {
@@ -77,7 +80,7 @@ export function withMDXE(nextConfig: NextConfig = {}, pluginOptions: MDXEPluginO
           },
           // Add metadata loader for App Router support
           {
-            loader: fileURLToPath(new URL('mdx-metadata-loader.ts', import.meta.url)),
+            loader: fileURLToPath(new URL('mdx-metadata-loader.js', import.meta.url)),
             options: {},
           },
         ],

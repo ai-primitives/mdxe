@@ -118,7 +118,8 @@ describe('fetchRemoteComponent', () => {
     // Simulate file not found for first few extensions
     vi.mocked(fs.stat).mockRejectedValueOnce(new Error('not found')) // .tsx
     vi.mocked(fs.stat).mockRejectedValueOnce(new Error('not found')) // .jsx
-    vi.mocked(fs.stat).mockResolvedValueOnce({ // .ts
+    vi.mocked(fs.stat).mockResolvedValueOnce({
+      // .ts
       isFile: () => true,
       mtimeMs: Date.now(),
     } as unknown as Stats)
@@ -129,9 +130,6 @@ describe('fetchRemoteComponent', () => {
     const result = await fetchRemoteComponent(relativePath, baseDir)
 
     expect(result).toBe(localContent)
-    expect(fs.readFile).toHaveBeenCalledWith(
-      path.join(baseDir, 'components/Button.ts'),
-      'utf-8'
-    )
+    expect(fs.readFile).toHaveBeenCalledWith(path.join(baseDir, 'components/Button.ts'), 'utf-8')
   })
 })

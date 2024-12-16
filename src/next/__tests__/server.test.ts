@@ -3,6 +3,7 @@ import { expect, describe, it, beforeAll, afterAll } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import fetch from 'node-fetch'
+import { setTimeout } from 'node:timers/promises'
 
 describe('Production Server', () => {
   const testDir = path.join(process.cwd(), 'test-next-server')
@@ -47,11 +48,10 @@ This page tests the production server functionality.
       private: true,
       scripts: {
         build: 'next build',
-        start: `next start -p ${port}`
-      }
+        start: `next start -p ${port}`,
+      },
     }
     fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
-
 
     // Install dependencies and build
     const cwd = process.cwd()
@@ -74,11 +74,11 @@ This page tests the production server functionality.
       // Start production server
       serverProcess = spawn('pnpm', ['start'], {
         stdio: 'pipe',
-        detached: true
+        detached: true,
       })
 
       // Wait for server to start
-      await new Promise(resolve => setTimeout(resolve, 5000))
+      await setTimeout(5000)
 
       // Test server response
       const response = await fetch(`http://localhost:${port}`)

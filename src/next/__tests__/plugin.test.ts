@@ -43,8 +43,8 @@ This is a test MDX file.
       private: true,
       scripts: {
         build: 'next build',
-        start: 'next start'
-      }
+        start: 'next start',
+      },
     }
     fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
   })
@@ -72,7 +72,7 @@ This is a test MDX file.
 
       // Verify MDX file was processed
       const buildFiles = fs.readdirSync(path.join(buildDir, 'server', 'pages'))
-      expect(buildFiles.some(file => file.includes('test'))).toBe(true)
+      expect(buildFiles.some((file) => file.includes('test'))).toBe(true)
     } finally {
       process.chdir(cwd)
     }

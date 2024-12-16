@@ -1,10 +1,11 @@
 import type { NextConfig } from 'next'
 import type { Configuration as WebpackConfig, RuleSetRule } from 'webpack'
+import type { NextJsWebpackConfig, WebpackConfigContext } from 'next/dist/server/config-shared'
 
 export const withMDXE = (config: NextConfig = {}): NextConfig => {
   return {
     ...config,
-    webpack: (webpackConfig: WebpackConfig, options: any) => {
+    webpack: (webpackConfig: WebpackConfig, options: WebpackConfigContext) => {
       // Initialize webpack config if needed
       const configuration = webpackConfig as WebpackConfig & {
         module: { rules: RuleSetRule[] }
@@ -29,18 +30,21 @@ export const withMDXE = (config: NextConfig = {}): NextConfig => {
       configuration.module.rules.push({
         test: /\.mdx?$/,
         use: [
-          options.defaultLoaders.babel,
+          {
+            loader: options.defaultLoaders.babel.loader,
+            options: options.defaultLoaders.babel.options,
+          },
           {
             loader: '@mdx-js/loader',
             options: {
-              providerImportSource: '@mdx-js/react'
-            }
-          }
-        ]
+              providerImportSource: '@mdx-js/react',
+            },
+          },
+        ],
       })
 
       return configuration
-    }
+    },
   }
 }
 

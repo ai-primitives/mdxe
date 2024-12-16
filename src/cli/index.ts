@@ -1,11 +1,11 @@
-import { version } from '../../package.json'
-import { processMDX } from '../mdx/processor'
+import pkg from '../../package.json'
+import { processMDX } from '../mdx/processor.js'
 import { watch } from 'chokidar'
 import { resolve, extname, dirname } from 'path'
 import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
 import { spawn, type ChildProcess } from 'child_process'
-import type { MDXEConfig } from './config'
+import type { MDXEConfig } from './config.js'
 
 const explorer = cosmiconfig('mdxe')
 
@@ -109,7 +109,7 @@ Configuration:
 }
 
 export function showVersion(): void {
-  console.log(`v${version}`)
+  console.log(`v${pkg.version}`)
 }
 
 export async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
