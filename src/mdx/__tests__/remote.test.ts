@@ -1,8 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resolveRemoteImport, fetchRemoteComponent } from '../remote'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
+
+// Add type for global fetch
+declare global {
+  var fetch: (url: string) => Promise<Response>
+}
 
 vi.mock('fs', () => ({
   promises: {
