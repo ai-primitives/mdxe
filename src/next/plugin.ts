@@ -1,6 +1,6 @@
 import type { NextConfig } from 'next'
 import type { Configuration as WebpackConfig } from 'webpack'
-import type { WebpackConfigContext } from 'next/dist/server/config-shared'
+import type { WebpackConfigContext } from '../types/next.js'
 import { processMDX } from '../mdx/processor.js'
 import type { ProcessedMDX } from '../mdx/processor.js'
 import { fileURLToPath } from 'url'

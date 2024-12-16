@@ -1,6 +1,6 @@
 import type { NextConfig } from 'next'
 import type { Configuration as WebpackConfig, RuleSetRule } from 'webpack'
-import type { WebpackConfigContext } from 'next/dist/server/config-shared'
+import type { WebpackConfigContext } from './types/next.js'
 
 export const withMDXE = (config: NextConfig = {}): NextConfig => {
   return {

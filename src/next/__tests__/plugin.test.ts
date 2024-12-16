@@ -2,7 +2,7 @@ import { execSync } from 'child_process'
 import { expect, describe, it, beforeAll, afterAll } from 'vitest'
 import fs from 'fs'
 import path from 'path'
-import { debug } from '../../test/setup'
+import { debug } from '../../test/setup.js'
 
 describe('Next.js Production Build', () => {
   const testDir = path.join(process.cwd(), 'test-next-build')
@@ -16,6 +16,49 @@ title: Test Page
 This is a test MDX file.
   `
 
+  const customComponent = `
+import React from 'react'
+
+export default function CustomButton({ children }) {
+  return (
+    <button className="bg-blue-500 text-white px-4 py-2 rounded">
+      {children}
+    </button>
+  )
+}
+`
+
+  const customStyles = `
+:root {
+  --mdxe-primary-color: #3b82f6;
+  --mdxe-text-color: #1f2937;
+  --mdxe-heading-font: 'Inter', sans-serif;
+}
+
+.mdxe-content {
+  color: var(--mdxe-text-color);
+}
+
+.mdxe-content h1 {
+  font-family: var(--mdxe-heading-font);
+  color: var(--mdxe-primary-color);
+}
+`
+
+  const styledMdxContent = `
+---
+title: Styled Test Page
+---
+
+import CustomButton from '../components/CustomButton'
+
+# Welcome to Styled MDX
+
+This page demonstrates style customization and component imports.
+
+<CustomButton>Click me!</CustomButton>
+`
+
   beforeAll(() => {
     try {
       debug('Creating test directory structure...')
@@ -27,17 +70,20 @@ This is a test MDX file.
       // Create test directory and files
       fs.mkdirSync(testDir, { recursive: true })
 
-      // Create app directory structure
-      fs.mkdirSync(path.join(testDir, 'app'), { recursive: true })
-      fs.mkdirSync(path.join(testDir, 'app', 'test'), { recursive: true })
-      fs.writeFileSync(path.join(testDir, 'app', 'test', 'page.mdx'), mdxContent)
+      // Create components directory
+      fs.mkdirSync(path.join(testDir, 'components'), { recursive: true })
+      fs.writeFileSync(path.join(testDir, 'components', 'CustomButton.tsx'), customComponent)
 
-      // Create pages directory structure (for backwards compatibility)
-      fs.mkdirSync(path.join(testDir, 'pages'), { recursive: true })
-      fs.writeFileSync(path.join(testDir, 'pages', 'test.mdx'), mdxContent)
+      // Create styles directory
+      fs.mkdirSync(path.join(testDir, 'styles'), { recursive: true })
+      fs.writeFileSync(path.join(testDir, 'styles', 'custom.css'), customStyles)
+
+      // Create app directory with styled MDX
+      fs.mkdirSync(path.join(testDir, 'app'), { recursive: true })
+      fs.mkdirSync(path.join(testDir, 'app', 'styled'), { recursive: true })
+      fs.writeFileSync(path.join(testDir, 'app', 'styled', 'page.mdx'), styledMdxContent)
 
       debug('Creating Next.js configuration...')
-      // Create minimal next.config.js
       const nextConfig = `
         const withMDXE = async () => {
           const { default: mdxe } = await import('${process.cwd()}/dist/index.js')
@@ -51,6 +97,12 @@ This is a test MDX file.
             pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
             experimental: {
               appDir: true
+            },
+            mdxe: {
+              styleOverrides: true,
+              customComponents: {
+                CustomButton: './components/CustomButton'
+              }
             }
           })
         }
@@ -58,7 +110,6 @@ This is a test MDX file.
       fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 
       debug('Creating package.json...')
-      // Create package.json with explicit dependencies
       const packageJson = {
         name: 'test-next-build',
         version: '1.0.0',
@@ -77,7 +128,16 @@ This is a test MDX file.
       }
       fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
 
-      // Create tsconfig.json for TypeScript support
+      const appComponent = `
+import '../styles/custom.css'
+
+export default function App({ Component, pageProps }) {
+  return <Component {...pageProps} />
+}
+`
+      fs.mkdirSync(path.join(testDir, 'pages'), { recursive: true })
+      fs.writeFileSync(path.join(testDir, 'pages', '_app.tsx'), appComponent)
+
       const tsConfig = {
         compilerOptions: {
           target: 'es5',
@@ -116,7 +176,7 @@ This is a test MDX file.
     }
   })
 
-  it('should build successfully with MDX files', async () => {
+  it('builds MDX files with style customization', async () => {
     const cwd = process.cwd()
     process.chdir(testDir)
 
@@ -125,27 +185,47 @@ This is a test MDX file.
       execSync('pnpm install', { stdio: 'inherit' })
 
       debug('Running build...')
-      const result = execSync('pnpm build', { encoding: 'utf8', stdio: 'inherit' })
-      expect(result).toBeTruthy()
+      execSync('pnpm build', { stdio: 'inherit' })
 
       debug('Verifying build output...')
       const buildDir = path.join(testDir, '.next')
       expect(fs.existsSync(buildDir)).toBe(true)
 
-      // Check both pages and app directory output
-      const pagesDir = path.join(buildDir, 'server', 'pages')
-      const appDir = path.join(buildDir, 'server', 'app')
+      const serverDir = path.join(buildDir, 'server')
+      const cssFiles = fs.readdirSync(serverDir).filter(file => file.endsWith('.css'))
+      expect(cssFiles.length).toBeGreaterThan(0)
 
-      debug('Build directories:')
-      debug('Pages dir exists:', fs.existsSync(pagesDir))
-      debug('App dir exists:', fs.existsSync(appDir))
+      const cssContent = fs.readFileSync(path.join(serverDir, cssFiles[0]), 'utf-8')
+      expect(cssContent).toContain('--mdxe-primary-color')
+      expect(cssContent).toContain('--mdxe-text-color')
+    } catch (error) {
+      debug('Build error:', error)
+      throw error
+    } finally {
+      process.chdir(cwd)
+    }
+  })
 
-      const buildFiles = fs.existsSync(pagesDir)
-        ? fs.readdirSync(pagesDir)
-        : fs.readdirSync(appDir)
+  it('handles custom component imports in production', async () => {
+    const cwd = process.cwd()
+    process.chdir(testDir)
 
-      debug('Build files:', buildFiles)
-      expect(buildFiles.some(file => file.includes('test'))).toBe(true)
+    try {
+      debug('Running build...')
+      execSync('pnpm build', { stdio: 'inherit' })
+
+      debug('Verifying component imports...')
+      const buildDir = path.join(testDir, '.next')
+      const appDir = path.join(buildDir, 'server', 'app', 'styled')
+      expect(fs.existsSync(appDir)).toBe(true)
+
+      const pageContent = fs.readFileSync(path.join(appDir, 'page.js'), 'utf-8')
+      expect(pageContent).toContain('CustomButton')
+      expect(pageContent).toContain('import')
+      expect(pageContent).toContain('components/CustomButton')
+
+      const componentFile = fs.existsSync(path.join(buildDir, 'server', 'components', 'CustomButton.js'))
+      expect(componentFile).toBe(true)
     } catch (error) {
       debug('Build error:', error)
       throw error

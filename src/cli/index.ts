@@ -1,4 +1,3 @@
-import pkg from '../../package.json'
 import { processMDX } from '../mdx/processor.js'
 import { watch } from 'chokidar'
 import { resolve, extname, dirname } from 'path'
@@ -6,6 +5,9 @@ import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
 import { spawn, type ChildProcess } from 'child_process'
 import type { MDXEConfig } from './config.js'
+
+// Import package.json with type assertion for ESM compatibility
+const pkg = await import('../../package.json', { assert: { type: 'json' } })
 
 const explorer = cosmiconfig('mdxe')
 
@@ -19,7 +21,8 @@ async function loadConfig(): Promise<MDXEConfig> {
     const result = await explorer.search()
     return result?.config || {}
   } catch (error) {
-    console.warn('Failed to load config:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.warn('Failed to load config:', errorMessage)
     return {}
   }
 }
@@ -60,7 +63,8 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
     console.log('Processed:', filepath)
     return result
   } catch (error) {
-    console.error('Error processing file:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('Error processing file:', errorMessage)
     process.exit(1)
   }
 }
@@ -73,7 +77,8 @@ function startNextDev(config: MDXEConfig) {
   })
 
   nextProcess.on('error', (error) => {
-    console.error('Failed to start Next.js dev server:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('Failed to start Next.js dev server:', errorMessage)
     process.exit(1)
   })
 
@@ -109,7 +114,7 @@ Configuration:
 }
 
 export function showVersion(): void {
-  console.log(`v${pkg.version}`)
+  console.log(`v${pkg.default.version}`)
 }
 
 export async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
@@ -165,14 +170,27 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     watcher.on('add', async (file) => {
       const absolutePath = resolve(process.cwd(), file)
       console.log(`File ${absolutePath} has been added`)
-      await processMDXFile(absolutePath, config)
+      try {
+        await processMDXFile(absolutePath, config)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error(`Error processing added file: ${errorMessage}`)
+      }
     })
     watcher.on('change', async (file) => {
       const absolutePath = resolve(process.cwd(), file)
       console.log(`File ${absolutePath} has been changed`)
-      await processMDXFile(absolutePath, config)
+      try {
+        await processMDXFile(absolutePath, config)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error(`Error processing changed file: ${errorMessage}`)
+      }
     })
-    watcher.on('error', (error) => console.error('Watcher error:', error))
+    watcher.on('error', (error) => {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('Watcher error:', errorMessage)
+    })
 
     // Handle cleanup
     process.on('SIGINT', () => {
