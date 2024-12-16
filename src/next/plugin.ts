@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next'
 import type { WebpackConfigContext } from 'next/dist/server/config-shared'
+import type { Configuration as WebpackConfig } from 'webpack'
 import { processMDX } from '../mdx/processor'
 import type { ProcessedMDX } from '../mdx/processor'
 
@@ -20,7 +21,15 @@ export function withMDXE(nextConfig: NextConfig = {}, pluginOptions: MDXEPluginO
     // Preserve existing pageExtensions or default to ['tsx', 'ts', 'jsx', 'js']
     pageExtensions: [...(nextConfig.pageExtensions || ['tsx', 'ts', 'jsx', 'js']), 'mdx', 'md'],
 
-    webpack(config: any, options: WebpackConfigContext) {
+    webpack(config: WebpackConfig, options: WebpackConfigContext) {
+      // Ensure module and rules exist
+      if (!config.module) {
+        config.module = { rules: [] }
+      }
+      if (!config.module.rules) {
+        config.module.rules = []
+      }
+
       // Add MDX loader configuration
       config.module.rules.push({
         test: /\.mdx?$/,
@@ -36,15 +45,20 @@ export function withMDXE(nextConfig: NextConfig = {}, pluginOptions: MDXEPluginO
               // Custom remark plugins for frontmatter handling
               remarkPlugins: [
                 // Extract frontmatter metadata for App Router
-                () => (tree: any, file: any) => {
+                () => (tree: unknown, file: { data: { meta?: Record<string, unknown>; metadata?: Record<string, unknown> } }) => {
                   const { metadata } = file.data
                   if (metadata) {
                     // Convert metadata to App Router format
-                    const { title, description, keywords, ...rest } = metadata
+                    const { title, description, keywords, ...rest } = metadata as {
+                      title?: string
+                      description?: string
+                      keywords?: string | string[]
+                      [key: string]: unknown
+                    }
                     file.data.meta = {
-                      ...(title && { title }),
-                      ...(description && { description }),
-                      ...(keywords && { keywords: Array.isArray(keywords) ? keywords : [keywords] }),
+                      ...(title ? { title } : {}),
+                      ...(description ? { description } : {}),
+                      ...(keywords ? { keywords: Array.isArray(keywords) ? keywords : [keywords] } : {}),
                       ...rest
                     }
                   }

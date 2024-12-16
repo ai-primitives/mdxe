@@ -2,7 +2,7 @@ import { version } from '../../package.json'
 import { processMDX } from '../mdx/processor'
 import { watch } from 'chokidar'
 import { resolve, extname, dirname } from 'path'
-import { existsSync, statSync } from 'fs'
+import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
 import { spawn, type ChildProcess } from 'child_process'
 import type { MDXEConfig } from './config'
@@ -49,9 +49,19 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
   }
 
   try {
+    // Process imports first
+    const processedContent = await resolveImports(
+      readFileSync(filepath, 'utf-8'),
+      config
+    )
+
     const result = await processMDX({
       filepath,
-      compileOptions: config.mdxOptions
+      content: processedContent,
+      compileOptions: {
+        ...config.mdxOptions,
+        jsx: true // Ensure JSX is enabled for component imports
+      }
     })
     console.log('Processed:', filepath)
     return result

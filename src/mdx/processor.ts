@@ -5,6 +5,7 @@ import type { CompileOptions } from '@mdx-js/mdx'
 
 interface MDXProcessorOptions {
   filepath: string
+  content?: string
   components?: Record<string, string>
   layout?: string
   compileOptions?: Partial<CompileOptions>
@@ -18,13 +19,14 @@ export interface ProcessedMDX {
 
 export async function processMDX({
   filepath,
+  content,
   components,
   layout,
   compileOptions = {}
 }: MDXProcessorOptions): Promise<ProcessedMDX> {
   try {
-    const source = readFileSync(filepath, 'utf-8')
-    const { data: frontmatter, content } = matter(source)
+    const source = content || readFileSync(filepath, 'utf-8')
+    const { data: frontmatter, content: mdxContent } = matter(source)
 
     const metadata = Object.entries(frontmatter).reduce((acc, [key, value]) => {
       if (key.startsWith('$') || key.startsWith('@')) {
@@ -47,7 +49,7 @@ export async function processMDX({
       }
     }
 
-    const result = await compile(`${exports.join('\n')}\n${content}`, {
+    const result = await compile(`${exports.join('\n')}\n${mdxContent}`, {
       jsx: true,
       outputFormat: 'function-body',
       ...compileOptions
