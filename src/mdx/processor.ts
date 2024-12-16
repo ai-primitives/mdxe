@@ -10,7 +10,7 @@ interface MDXProcessorOptions {
   compileOptions?: Partial<CompileOptions>
 }
 
-interface ProcessedMDX {
+export interface ProcessedMDX {
   code: string
   frontmatter: Record<string, unknown>
   metadata: Record<string, unknown>
