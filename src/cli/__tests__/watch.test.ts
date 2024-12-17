@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, type ChildProcess, execSync } from 'child_process'
 import { resolve, join, dirname } from 'path'
-import { mkdirSync, writeFileSync, rmSync, openSync, closeSync, fsyncSync, statSync, existsSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, openSync, closeSync, fsyncSync, statSync, existsSync, readFileSync } from 'fs'
 import { writeFile } from 'fs/promises'
 import fetch from 'node-fetch'
 import { sleep, debug } from '../../test/setup.js'
@@ -42,13 +42,20 @@ async function cleanupTestFiles() {
 function syncFile(filepath: string) {
   debug(`Syncing file: ${filepath}`)
   const fd = openSync(filepath, 'r')
-  fsyncSync(fd)
-  closeSync(fd)
-  // Also sync the directory to ensure the file creation is persisted
-  const dirFd = openSync(dirname(filepath), 'r')
-  fsyncSync(dirFd)
-  closeSync(dirFd)
-  debug(`Synced file and directory: ${filepath}`)
+  try {
+    debug('Calling fsyncSync...')
+    fsyncSync(fd)
+    debug('fsyncSync completed')
+    closeSync(fd)
+    debug('File descriptor closed')
+    // Force a file system sync to ensure changes are written to disk
+    execSync('sync')
+    debug('File system sync completed')
+  } catch (error) {
+    debug(`Error syncing file: ${error}`)
+    if (fd !== undefined) closeSync(fd)
+    throw error
+  }
 }
 
 async function setupTestDirectory() {
@@ -117,8 +124,19 @@ describe('Watch Mode', () => {
 
   it('should detect changes in single file mode', async () => {
     debug('Starting single file mode test')
-    let hasProcessedFiles = false
     const absolutePath = resolve(testDir, 'test.mdx')
+    let initialProcessingDone = false
+    let fileChangeProcessed = false
+    let resolveInitialProcessing: () => void
+    let resolveFileChange: () => void
+
+    const initialProcessingPromise = new Promise<void>((resolve) => {
+      resolveInitialProcessing = resolve
+    })
+
+    const fileChangePromise = new Promise<void>((resolve) => {
+      resolveFileChange = resolve
+    })
 
     const env = { ...process.env }
     debug('Starting watch process...')
@@ -131,56 +149,15 @@ describe('Watch Mode', () => {
       const output = data.toString()
       debug('Watch process output:', output)
       if (output.includes('Successfully processed file:')) {
-        hasProcessedFiles = true
-      }
-    })
-
-    watchProcess.stderr.on('data', (data: Buffer) => {
-      debug('Watch process error:', data.toString())
-    })
-
-    activeProcesses.push({
-      process: watchProcess,
-      cleanup: async () => {
-        debug('Cleaning up watch process...')
-        watchProcess.kill()
-        await sleep(1000) // Wait for process to fully terminate
-      }
-    })
-
-    debug('Waiting for watcher initialization...')
-    await sleep(10000) // Increase from 5000ms to 10000ms to ensure watcher is fully initialized
-    debug('Initialization wait complete')
-
-    debug('Modifying test file...')
-    await writeFile(absolutePath, 'Updated content')
-    syncFile(absolutePath)
-    debug('Test file modified and synced')
-
-    const startTime = Date.now()
-    while (!hasProcessedFiles && Date.now() - startTime < TEST_TIMEOUT - 2000) {
-      await sleep(100)
-    }
-
-    expect(hasProcessedFiles).toBe(true)
-  }, TEST_TIMEOUT)
-
-  it('should detect changes in directory mode', async () => {
-    debug('Starting directory mode test')
-    let hasProcessedFiles = false
-    const env = { ...process.env }
-
-    debug('Starting watch process...')
-    const watchProcess = spawn('node', ['./bin/cli.js', '--watch', contentDir], {
-      env,
-      stdio: ['pipe', 'pipe', 'pipe']
-    })
-
-    watchProcess.stdout.on('data', (data: Buffer) => {
-      const output = data.toString()
-      debug('Watch process output:', output)
-      if (output.includes('Successfully processed file:')) {
-        hasProcessedFiles = true
+        if (!initialProcessingDone) {
+          debug('Initial processing completed')
+          initialProcessingDone = true
+          resolveInitialProcessing()
+        } else {
+          debug('File change processing completed')
+          fileChangeProcessed = true
+          resolveFileChange()
+        }
       }
     })
 
@@ -198,21 +175,100 @@ describe('Watch Mode', () => {
     })
 
     debug('Waiting for initial processing...')
-    await sleep(5000)
-    debug('Initial wait complete')
+    await Promise.race([
+      initialProcessingPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for initial processing')), 30000))
+    ])
+    debug('Initial processing complete')
 
+    debug('Modifying test file...')
+    const originalContent = readFileSync(absolutePath, 'utf-8')
+    debug(`Original content: ${originalContent}`)
+    await writeFile(absolutePath, 'Updated content')
+    syncFile(absolutePath)
+    const newContent = readFileSync(absolutePath, 'utf-8')
+    debug(`New content: ${newContent}`)
+    debug('Test file modified and synced')
+    debug('Waiting for file change processing...')
+    await Promise.race([
+      fileChangePromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for file change processing')), TEST_TIMEOUT - 30000))
+    ])
+    debug('File processing completed')
+  }, TEST_TIMEOUT)
+
+  it('should detect changes in directory mode', async () => {
+    debug('Starting directory mode test')
+    let initialProcessingDone = false
+    let fileChangeProcessed = false
+    let resolveInitialProcessing: () => void
+    let resolveFileChange: () => void
+
+    const initialProcessingPromise = new Promise<void>((resolve) => {
+      resolveInitialProcessing = resolve
+    })
+
+    const fileChangePromise = new Promise<void>((resolve) => {
+      resolveFileChange = resolve
+    })
+
+    const env = { ...process.env }
+    debug('Starting watch process...')
+    const watchProcess = spawn('node', ['./bin/cli.js', '--watch', contentDir], {
+      env,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+
+    watchProcess.stdout.on('data', (data: Buffer) => {
+      const output = data.toString()
+      debug('Watch process output:', output)
+      if (output.includes('Successfully processed file:')) {
+        if (!initialProcessingDone) {
+          debug('Initial processing completed')
+          initialProcessingDone = true
+          resolveInitialProcessing()
+        } else {
+          debug('File change processing completed')
+          fileChangeProcessed = true
+          resolveFileChange()
+        }
+      }
+    })
+
+    watchProcess.stderr.on('data', (data: Buffer) => {
+      debug('Watch process error:', data.toString())
+    })
+
+    activeProcesses.push({
+      process: watchProcess,
+      cleanup: async () => {
+        debug('Cleaning up watch process...')
+        watchProcess.kill()
+        await sleep(1000) // Wait for process to fully terminate
+      }
+    })
+
+    debug('Waiting for initial processing...')
+    await Promise.race([
+      initialProcessingPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for initial processing')), 30000))
+    ])
+    debug('Initial processing complete')
     debug('Modifying page1.mdx...')
     const page1Path = join(contentDir, 'page1.mdx')
+    const originalContent = readFileSync(page1Path, 'utf-8')
+    debug(`Original content: ${originalContent}`)
     await writeFile(page1Path, 'Updated content')
     syncFile(page1Path)
+    const newContent = readFileSync(page1Path, 'utf-8')
+    debug(`New content: ${newContent}`)
     debug('Page1.mdx modified and synced')
-
-    const startTime = Date.now()
-    while (!hasProcessedFiles && Date.now() - startTime < TEST_TIMEOUT - 2000) {
-      await sleep(100)
-    }
-
-    expect(hasProcessedFiles).toBe(true)
+    debug('Waiting for file change processing...')
+    await Promise.race([
+      fileChangePromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for file change processing')), TEST_TIMEOUT - 30000))
+    ])
+    debug('File processing completed')
   }, TEST_TIMEOUT)
 
   it('should work with next dev', async () => {
