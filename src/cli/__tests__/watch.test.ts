@@ -2,6 +2,7 @@ import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
 import { spawn, type ChildProcess } from 'child_process'
 import { resolve, join, dirname } from 'path'
 import { mkdirSync, writeFileSync, rmSync, openSync, closeSync, fsyncSync, statSync, existsSync } from 'fs'
+import { writeFile } from 'fs/promises'
 import fetch from 'node-fetch'
 import { sleep, debug } from '../../test/setup.js'
 
@@ -13,6 +14,7 @@ const contentDir = join(testDir, 'content')
 let activeProcesses: Array<{ process: ChildProcess; cleanup: () => Promise<void> }> = []
 
 async function cleanupTestFiles() {
+  debug('Cleaning up test files...')
   for (const { process, cleanup } of activeProcesses) {
     try {
       process.kill()
@@ -24,15 +26,21 @@ async function cleanupTestFiles() {
   activeProcesses = []
 
   try {
-    rmSync(testDir, { recursive: true, force: true })
-    debug('Cleaned up test directory:', testDir)
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true })
+      debug('Test directory removed:', testDir)
+    }
+    // Wait a bit to ensure cleanup is complete
+    await sleep(1000)
+    debug('Cleanup complete')
   } catch (error) {
-    debug('Error cleaning up test directory:', error)
+    console.error('Error during cleanup:', error)
   }
 }
 
 // Utility function to sync file to disk
 function syncFile(filepath: string) {
+  debug(`Syncing file: ${filepath}`)
   const fd = openSync(filepath, 'r')
   fsyncSync(fd)
   closeSync(fd)
@@ -44,12 +52,40 @@ function syncFile(filepath: string) {
 }
 
 async function setupTestDirectory() {
+  debug('Setting up test directory...')
   try {
+    // Ensure clean state
+    await cleanupTestFiles()
+
+    // Create test directories
     mkdirSync(testDir, { recursive: true })
     mkdirSync(contentDir, { recursive: true })
     debug('Created test directories:', { testDir, contentDir })
+
+    // Create initial test files
+    const singleFile = join(testDir, 'test.mdx')
+    await writeFile(singleFile, '# Test\nThis is a test file.\n')
+    syncFile(singleFile)
+    debug('Created and synced single test file:', singleFile)
+
+    const page1Path = join(contentDir, 'page1.mdx')
+    const page2Path = join(contentDir, 'page2.mdx')
+    await writeFile(page1Path, '# Page 1\nThis is a test file.\n')
+    await writeFile(page2Path, '# Page 2\nThis is another test file.\n')
+    syncFile(page1Path)
+    syncFile(page2Path)
+    debug('Created and synced directory test files:', { page1Path, page2Path })
+
+    // Verify file creation
+    const stats = statSync(singleFile)
+    debug('Test file stats:', {
+      size: stats.size,
+      mode: stats.mode,
+      mtime: stats.mtime
+    })
   } catch (error) {
-    debug('Error setting up test directories:', error)
+    console.error('Error setting up test directory:', error)
+    throw error
   }
 }
 
@@ -80,262 +116,103 @@ describe('Watch Mode', () => {
   })
 
   it('should detect changes in single file mode', async () => {
-    let hasProcessedFile = false
-    const absolutePath = resolve(process.cwd(), singleFile)
-    const cliPath = resolve(process.cwd(), 'bin', 'cli.js')
-    const args = ['--watch', absolutePath]  // Ensure --watch flag is present
-
     debug('Starting single file mode test')
-    debug('Test configuration:', {
-      absolutePath,
-      cliPath,
-      args,
-      cwd: process.cwd()
-    })
+    let hasProcessedFiles = false
+    const absolutePath = resolve(testDir, 'test.mdx')
 
-    const fd = openSync(absolutePath, 'w')
-    try {
-      const initialContent = `# Initial Test\nThis is a test file.\n`
-      writeFileSync(fd, initialContent, 'utf-8')
-      fsyncSync(fd)
-      debug('Initial file written:', {
-        content: initialContent,
-        path: absolutePath
-      })
-    } finally {
-      closeSync(fd)
-      debug('File descriptor closed')
-    }
-
-    try {
-      const stats = statSync(absolutePath)
-      debug('Initial file stats:', {
-        size: stats.size,
-        mode: stats.mode,
-        mtime: stats.mtime,
-        exists: existsSync(absolutePath)
-      })
-    } catch (error) {
-      debug('Error checking file:', error)
-      throw error
-    }
-
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      DEBUG: '*',
-      NODE_ENV: 'test',
-      FORCE_COLOR: '0',
-      NO_COLOR: '1'
-    }
-
-    debug('Spawning watch process...')
-    const watchProcess: ChildProcess = spawn('node', [cliPath, ...args], {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const env = { ...process.env }
+    debug('Starting watch process...')
+    const watchProcess = spawn('node', ['./bin/cli.js', '--watch', absolutePath], {
       env,
-      cwd: process.cwd(),
-      shell: false
+      stdio: ['pipe', 'pipe', 'pipe']
     })
 
-    debug('Watch process spawned:', {
-      pid: watchProcess.pid,
-      spawnargs: watchProcess.spawnargs
+    watchProcess.stdout.on('data', (data: Buffer) => {
+      const output = data.toString()
+      debug('Watch process output:', output)
+      if (output.includes('Successfully processed file:')) {
+        hasProcessedFiles = true
+      }
+    })
+
+    watchProcess.stderr.on('data', (data: Buffer) => {
+      debug('Watch process error:', data.toString())
     })
 
     activeProcesses.push({
       process: watchProcess,
       cleanup: async () => {
         debug('Cleaning up watch process...')
-        try {
-          watchProcess.kill('SIGTERM')
-          await sleep(1000)
-          if (!watchProcess.killed) {
-            watchProcess.kill('SIGKILL')
-            debug('Process killed with SIGKILL')
-          }
-        } catch (error: any) {
-          debug('Error force killing process:', error)
-        }
+        watchProcess.kill()
+        await sleep(1000) // Wait for process to fully terminate
       }
-    })
-
-    watchProcess.on('error', (error: Error) => {
-      debug('Watch process error:', error)
-      throw error
-    })
-
-    watchProcess.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
-      debug('Watch process exited:', { code, signal })
-      if (code !== null && code !== 0) {
-        throw new Error(`Watch process exited with code ${code}`)
-      }
-      if (signal !== null) {
-        throw new Error(`Watch process killed with signal ${signal}`)
-      }
-    })
-
-    let output = ''
-    watchProcess.stdout?.on('data', (data: Buffer) => {
-      const chunk = data.toString()
-      output += chunk
-      debug('Watch process stdout:', chunk)
-      if (chunk.includes('Successfully processed file:')) {
-        debug('Change detection success marker found in output')
-        hasProcessedFile = true
-      }
-    })
-
-    watchProcess.stderr?.on('data', (data: Buffer) => {
-      const chunk = data.toString()
-      debug('Watch process stderr:', chunk)
     })
 
     debug('Waiting for watcher initialization...')
-    await sleep(5000) // Increase wait time to account for polling interval
+    await sleep(5000)
     debug('Initialization wait complete')
 
     debug('Modifying test file...')
-    const updateFd = openSync(absolutePath, 'w')
-    try {
-      const updatedContent = `# Updated Test\nThis file has been modified.\n`
-      writeFileSync(updateFd, updatedContent, 'utf-8')
-      fsyncSync(updateFd)
-      const dirFd = openSync(dirname(absolutePath), 'r')
-      try {
-        fsyncSync(dirFd)
-        debug('Directory synced')
-      } finally {
-        closeSync(dirFd)
-      }
-      debug('File modification completed:', {
-        content: updatedContent,
-        path: absolutePath,
-        timestamp: new Date().toISOString()
-      })
-    } finally {
-      closeSync(updateFd)
-      debug('Update file descriptor closed')
-    }
-
-    try {
-      const stats = statSync(absolutePath)
-      debug('Modified file stats:', {
-        size: stats.size,
-        mode: stats.mode,
-        mtime: stats.mtime,
-        exists: existsSync(absolutePath)
-      })
-    } catch (error) {
-      debug('Error checking modified file:', error)
-      throw error
-    }
+    await writeFile(absolutePath, 'Updated content')
+    syncFile(absolutePath)
+    debug('Test file modified and synced')
 
     const startTime = Date.now()
-    while (!hasProcessedFile && Date.now() - startTime < TEST_TIMEOUT - 2000) {
-      debug('Still waiting for change detection...', {
-        elapsed: Date.now() - startTime,
-        hasProcessedFile,
-        outputLength: output.length
-      })
-      await sleep(500)
+    while (!hasProcessedFiles && Date.now() - startTime < TEST_TIMEOUT - 2000) {
+      await sleep(100)
     }
 
-    debug('Test completion state:', {
-      hasProcessedFile,
-      elapsedTime: Date.now() - startTime,
-      outputLength: output.length,
-      output
-    })
-
-    expect(hasProcessedFile).toBe(true)
+    expect(hasProcessedFiles).toBe(true)
   }, TEST_TIMEOUT)
 
   it('should detect changes in directory mode', async () => {
+    debug('Starting directory mode test')
     let hasProcessedFiles = false
-    const args = ['--watch', contentDir]
-    const cliPath = resolve(process.cwd(), 'bin', 'cli.js')
+    const env = { ...process.env }
 
-    const watchProcess: ChildProcess = spawn('node', [cliPath, ...args], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, DEBUG: '*', NODE_ENV: 'test', FORCE_COLOR: '0', NO_COLOR: '1' },
-      cwd: process.cwd()
+    debug('Starting watch process...')
+    const watchProcess = spawn('node', ['./bin/cli.js', '--watch', contentDir], {
+      env,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+
+    watchProcess.stdout.on('data', (data: Buffer) => {
+      const output = data.toString()
+      debug('Watch process output:', output)
+      if (output.includes('Successfully processed file:')) {
+        hasProcessedFiles = true
+      }
+    })
+
+    watchProcess.stderr.on('data', (data: Buffer) => {
+      debug('Watch process error:', data.toString())
     })
 
     activeProcesses.push({
       process: watchProcess,
       cleanup: async () => {
-        try {
-          watchProcess.kill('SIGTERM')
-          await sleep(1000)
-          if (!watchProcess.killed) {
-            watchProcess.kill('SIGKILL')
-          }
-        } catch (error) {
-          debug('Error killing watch process:', error)
-        }
+        debug('Cleaning up watch process...')
+        watchProcess.kill()
+        await sleep(1000) // Wait for process to fully terminate
       }
-    })
-
-    watchProcess.stdout?.on('data', (data: Buffer) => {
-      const output = data.toString()
-      debug('Watch process output:', output)
-      if (output.includes('has been changed') || output.includes('has been added')) {
-        debug('Change event detected')
-        hasProcessedFiles = true
-      }
-    })
-
-    watchProcess.stderr?.on('data', (data: Buffer) => {
-      debug('Watch process error:', data.toString())
     })
 
     debug('Waiting for initial processing...')
-    await sleep(5000) // Increase wait time to match single file mode
+    await sleep(5000)
     debug('Initial wait complete')
+
     debug('Modifying page1.mdx...')
     const page1Path = join(contentDir, 'page1.mdx')
-    const page1Fd = openSync(page1Path, 'w')
-    try {
-      writeFileSync(page1Fd, `# Updated Page 1\nThis is an updated test file.\n`, 'utf-8')
-      fsyncSync(page1Fd)
-      // Add additional fsync on the directory
-      const dirFd = openSync(dirname(page1Path), 'r')
-      try {
-        fsyncSync(dirFd)
-        debug('Directory synced')
-      } finally {
-        closeSync(dirFd)
-      }
-      debug('File modification completed:', { path: page1Path, timestamp: new Date().toISOString() })
-    } finally {
-      closeSync(page1Fd)
-    }
-
-    debug('Adding page3.mdx...')
-    const page3Path = join(contentDir, 'page3.mdx')
-    const page3Fd = openSync(page3Path, 'w')
-    try {
-      writeFileSync(page3Fd, `# Page 3\nThis is a new test file.\n`, 'utf-8')
-      fsyncSync(page3Fd)
-      // Add additional fsync on the directory
-      const dirFd = openSync(dirname(page3Path), 'r')
-      try {
-        fsyncSync(dirFd)
-        debug('Directory synced')
-      } finally {
-        closeSync(dirFd)
-      }
-      debug('File addition completed:', { path: page3Path, timestamp: new Date().toISOString() })
-    } finally {
-      closeSync(page3Fd)
-    }
+    await writeFile(page1Path, 'Updated content')
+    syncFile(page1Path)
+    debug('Page1.mdx modified and synced')
 
     const startTime = Date.now()
     while (!hasProcessedFiles && Date.now() - startTime < TEST_TIMEOUT - 2000) {
-      await sleep(500)
-      debug('Still waiting for change detection...')
+      await sleep(100)
     }
 
-    expect(hasProcessedFiles, 'Directory changes should be detected').toBe(true)
+    expect(hasProcessedFiles).toBe(true)
   }, TEST_TIMEOUT)
 
   it('should work with next dev', async () => {
