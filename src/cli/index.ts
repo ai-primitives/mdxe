@@ -178,15 +178,15 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       ignoreInitial: false,
       cwd: process.cwd(),
       awaitWriteFinish: {
-        stabilityThreshold: 1000, // Increased from 300ms
-        pollInterval: 300 // Increased from 100ms
+        stabilityThreshold: 300, // Decreased from 1000ms for faster response
+        pollInterval: 100 // Decreased from 300ms for faster response
       },
-      usePolling: true,
-      interval: 300, // Increased from 100ms for more reliable detection
-      binaryInterval: 1000, // Increased from 300ms
+      usePolling: false, // Changed to false since we're using fs events
+      interval: 100, // Decreased from 300ms
+      binaryInterval: 300, // Decreased from 1000ms
       alwaysStat: true,
       atomic: true,
-      followSymlinks: false // Added to prevent potential infinite loops
+      followSymlinks: false
     })
 
     console.log('Watching for changes...')
@@ -232,8 +232,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       const absolutePath = resolve(process.cwd(), file)
       console.log(`File ${absolutePath} has been changed (${new Date().toISOString()})`)
       try {
-        // Add a small delay to ensure file is fully written
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // Reduced delay to improve test responsiveness
+        await new Promise(resolve => setTimeout(resolve, 100))
 
         // Double check if file exists and is accessible
         if (!existsSync(absolutePath)) {

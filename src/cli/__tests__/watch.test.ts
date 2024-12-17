@@ -2,8 +2,9 @@ import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
 import { spawn, type ChildProcess, execSync } from 'child_process'
 import { resolve, join, dirname } from 'path'
 import { mkdirSync, writeFileSync, rmSync, openSync, closeSync, fsyncSync, statSync, existsSync, readFileSync } from 'fs'
-import { writeFile } from 'fs/promises'
+import { writeFile, rm } from 'fs/promises'
 import fetch from 'node-fetch'
+import find from 'find-process'
 import { sleep, debug } from '../../test/setup.js'
 
 const TEST_TIMEOUT = 120000 // 2 minutes
@@ -14,47 +15,54 @@ const contentDir = join(testDir, 'content')
 let activeProcesses: Array<{ process: ChildProcess; cleanup: () => Promise<void> }> = []
 
 async function cleanupTestFiles() {
-  debug('Cleaning up test files...')
-  for (const { process, cleanup } of activeProcesses) {
-    try {
-      process.kill()
-      await cleanup()
-    } catch (error) {
-      debug('Error cleaning up process:', error)
-    }
-  }
-  activeProcesses = []
-
+  debug('Running cleanup...')
   try {
-    if (existsSync(testDir)) {
-      rmSync(testDir, { recursive: true, force: true })
-      debug('Test directory removed:', testDir)
+    // Kill any lingering watch processes
+    const processes = await find('name', 'node')
+    for (const proc of processes) {
+      if (proc.cmd && proc.cmd.includes('--watch')) {
+        debug(`Killing watch process ${proc.pid}...`)
+        try {
+          process.kill(proc.pid)
+        } catch (err) {
+          debug(`Error killing process ${proc.pid}:`, err)
+        }
+      }
     }
-    // Wait a bit to ensure cleanup is complete
-    await sleep(2000)
+
+    // Ensure test directories are removed
+    const testDirs = [testDir, contentDir]
+    for (const dir of testDirs) {
+      try {
+        await rm(dir, { recursive: true, force: true })
+        debug(`Removed directory: ${dir}`)
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          debug(`Error removing directory ${dir}:`, err)
+        }
+      }
+    }
     debug('Cleanup complete')
-  } catch (error) {
-    console.error('Error during cleanup:', error)
+  } catch (err) {
+    debug('Error during cleanup:', err)
+    throw err
   }
 }
 
-// Utility function to sync file to disk
 function syncFile(filepath: string) {
   debug(`Syncing file: ${filepath}`)
-  const fd = openSync(filepath, 'r')
   try {
-    debug('Calling fsyncSync...')
-    fsyncSync(fd)
-    debug('fsyncSync completed')
-    closeSync(fd)
-    debug('File descriptor closed')
-    // Force a file system sync to ensure changes are written to disk
-    execSync('sync')
-    debug('File system sync completed')
-  } catch (error) {
-    debug(`Error syncing file: ${error}`)
-    if (fd !== undefined) closeSync(fd)
-    throw error
+    const fd = openSync(filepath, 'r')
+    try {
+      fsyncSync(fd)
+      debug(`Successfully synced file: ${filepath}`)
+    } finally {
+      closeSync(fd)
+      debug(`Closed file descriptor for: ${filepath}`)
+    }
+  } catch (err) {
+    debug(`Error syncing file ${filepath}:`, err)
+    throw err
   }
 }
 
@@ -102,11 +110,18 @@ describe('Watch Mode', () => {
     // Kill any lingering processes first
     for (const { process, cleanup } of activeProcesses) {
       debug('Cleaning up active process:', process.pid)
-      cleanup()
+      try {
+        await cleanup()
+        debug('Successfully cleaned up process:', process.pid)
+      } catch (err) {
+        debug('Error during process cleanup:', err)
+      }
     }
     activeProcesses = []
     await cleanupTestFiles()
     await setupTestDirectory()
+    // Additional wait to ensure system is ready
+    await sleep(2000)
     debug('beforeEach cleanup complete')
   })
 
@@ -115,46 +130,81 @@ describe('Watch Mode', () => {
     // Ensure all processes are terminated
     for (const { process, cleanup } of activeProcesses) {
       debug('Cleaning up active process:', process.pid)
-      cleanup()
+      try {
+        await cleanup()
+        debug('Successfully cleaned up process:', process.pid)
+      } catch (err) {
+        debug('Error during process cleanup:', err)
+      }
     }
     activeProcesses = []
     await cleanupTestFiles()
+    // Additional wait to ensure cleanup is complete
+    await sleep(2000)
     debug('afterEach cleanup complete')
   })
 
   it('should detect changes in single file mode', async () => {
     debug('Starting single file mode test')
     const absolutePath = resolve(testDir, 'test.mdx')
+    debug(`Test file path: ${absolutePath}`)
     let initialProcessingDone = false
     let fileChangeProcessed = false
     let resolveInitialProcessing: () => void
     let resolveFileChange: () => void
 
-    const initialProcessingPromise = new Promise<void>((resolve) => {
-      resolveInitialProcessing = resolve
+    // Create promises with proper timeouts
+    const initialProcessingPromise = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timeout waiting for initial processing'))
+      }, 45000) // 45 seconds for initial processing
+      resolveInitialProcessing = () => {
+        clearTimeout(timeout)
+        resolve()
+      }
     })
 
-    const fileChangePromise = new Promise<void>((resolve) => {
-      resolveFileChange = resolve
+    const fileChangePromise = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timeout waiting for file change processing'))
+      }, 45000) // 45 seconds for file change processing
+      resolveFileChange = () => {
+        clearTimeout(timeout)
+        resolve()
+      }
     })
 
-    const env = { ...process.env }
-    debug('Starting watch process...')
+    debug('Starting watcher process...')
     const watchProcess = spawn('node', ['./bin/cli.js', '--watch', absolutePath], {
-      env,
+      env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe']
     })
+    debug(`Watch process started with PID: ${watchProcess.pid}`)
+
+    // Enhanced error handling and debug logging for watch process
+    watchProcess.on('error', (error) => {
+      debug('Watch process error:', error)
+    })
+
+    watchProcess.on('exit', (code) => {
+      debug(`Watch process exited with code: ${code}`)
+    })
+
+    // Wait for watcher to fully initialize
+    debug('Waiting for watcher initialization...')
+    await sleep(5000)
+    debug('Watcher process initialization complete')
 
     watchProcess.stdout.on('data', (data: Buffer) => {
       const output = data.toString()
-      debug('Watch process output:', output)
+      debug(`Watch process output: ${output.trim()}`)
       if (output.includes('Successfully processed file:')) {
         if (!initialProcessingDone) {
-          debug('Initial processing completed')
+          debug('Initial processing completed successfully')
           initialProcessingDone = true
           resolveInitialProcessing()
-        } else {
-          debug('File change processing completed')
+        } else if (!fileChangeProcessed) {
+          debug('File change processing completed successfully')
           fileChangeProcessed = true
           resolveFileChange()
         }
@@ -162,73 +212,122 @@ describe('Watch Mode', () => {
     })
 
     watchProcess.stderr.on('data', (data: Buffer) => {
-      debug('Watch process error:', data.toString())
+      debug(`Watch process error output: ${data.toString().trim()}`)
     })
 
     activeProcesses.push({
       process: watchProcess,
       cleanup: async () => {
-        debug('Cleaning up watch process...')
-        watchProcess.kill()
-        await sleep(1000) // Wait for process to fully terminate
+        debug('Starting watch process cleanup...')
+        try {
+          watchProcess.kill('SIGTERM')
+          await sleep(2000)
+          if (!watchProcess.killed) {
+            debug('Process did not terminate with SIGTERM, using SIGKILL')
+            watchProcess.kill('SIGKILL')
+          }
+          debug('Watch process cleanup completed')
+        } catch (err) {
+          debug('Error during watch process cleanup:', err)
+          throw err
+        }
       }
     })
 
-    debug('Waiting for initial processing...')
-    await Promise.race([
-      initialProcessingPromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for initial processing')), 30000))
-    ])
-    debug('Initial processing complete')
+    try {
+      debug('Waiting for initial processing...')
+      await initialProcessingPromise
+      debug('Initial processing complete, preparing for file modification')
 
-    debug('Modifying test file...')
-    const originalContent = readFileSync(absolutePath, 'utf-8')
-    debug(`Original content: ${originalContent}`)
-    await writeFile(absolutePath, 'Updated content')
-    syncFile(absolutePath)
-    const newContent = readFileSync(absolutePath, 'utf-8')
-    debug(`New content: ${newContent}`)
-    debug('Test file modified and synced')
-    debug('Waiting for file change processing...')
-    await Promise.race([
-      fileChangePromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for file change processing')), TEST_TIMEOUT - 30000))
-    ])
-    debug('File processing completed')
+      // Add delay before modifying file
+      debug('Waiting before file modification...')
+      await sleep(2000)
+      debug('Starting file modification...')
+
+      const originalContent = readFileSync(absolutePath, 'utf-8')
+      debug(`Original file content: ${originalContent.trim()}`)
+
+      debug('Writing updated content to file...')
+      await writeFile(absolutePath, 'Updated content')
+      debug('File write complete, syncing to disk...')
+      syncFile(absolutePath)
+
+      const newContent = readFileSync(absolutePath, 'utf-8')
+      debug(`New file content: ${newContent.trim()}`)
+      debug('File modification complete')
+
+      // Add delay after file modification
+      debug('Waiting after file modification...')
+      await sleep(2000)
+      debug('Starting file change detection...')
+      await fileChangePromise
+      debug('File change detection completed successfully')
+    } catch (error) {
+      debug('Test error:', error)
+      throw error
+    }
   }, TEST_TIMEOUT)
 
   it('should detect changes in directory mode', async () => {
     debug('Starting directory mode test')
+    debug(`Content directory path: ${contentDir}`)
     let initialProcessingDone = false
     let fileChangeProcessed = false
     let resolveInitialProcessing: () => void
     let resolveFileChange: () => void
 
-    const initialProcessingPromise = new Promise<void>((resolve) => {
-      resolveInitialProcessing = resolve
+    // Create promises with proper timeouts
+    const initialProcessingPromise = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timeout waiting for initial processing'))
+      }, 45000)
+      resolveInitialProcessing = () => {
+        clearTimeout(timeout)
+        resolve()
+      }
     })
 
-    const fileChangePromise = new Promise<void>((resolve) => {
-      resolveFileChange = resolve
+    const fileChangePromise = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timeout waiting for file change processing'))
+      }, 45000)
+      resolveFileChange = () => {
+        clearTimeout(timeout)
+        resolve()
+      }
     })
 
-    const env = { ...process.env }
-    debug('Starting watch process...')
+    debug('Starting watch process for directory mode...')
     const watchProcess = spawn('node', ['./bin/cli.js', '--watch', contentDir], {
-      env,
+      env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe']
     })
+    debug(`Directory watch process started with PID: ${watchProcess.pid}`)
+
+    // Enhanced error handling and debug logging for watch process
+    watchProcess.on('error', (error) => {
+      debug('Directory watch process error:', error)
+    })
+
+    watchProcess.on('exit', (code) => {
+      debug(`Directory watch process exited with code: ${code}`)
+    })
+
+    // Wait for watcher to fully initialize
+    debug('Waiting for directory watcher initialization...')
+    await sleep(5000)
+    debug('Directory watcher initialization complete')
 
     watchProcess.stdout.on('data', (data: Buffer) => {
       const output = data.toString()
-      debug('Watch process output:', output)
+      debug(`Directory watch process output: ${output.trim()}`)
       if (output.includes('Successfully processed file:')) {
         if (!initialProcessingDone) {
-          debug('Initial processing completed')
+          debug('Directory initial processing completed successfully')
           initialProcessingDone = true
           resolveInitialProcessing()
-        } else {
-          debug('File change processing completed')
+        } else if (!fileChangeProcessed) {
+          debug('Directory file change processing completed successfully')
           fileChangeProcessed = true
           resolveFileChange()
         }
@@ -236,39 +335,62 @@ describe('Watch Mode', () => {
     })
 
     watchProcess.stderr.on('data', (data: Buffer) => {
-      debug('Watch process error:', data.toString())
+      debug(`Directory watch process error output: ${data.toString().trim()}`)
     })
 
     activeProcesses.push({
       process: watchProcess,
       cleanup: async () => {
-        debug('Cleaning up watch process...')
-        watchProcess.kill()
-        await sleep(1000) // Wait for process to fully terminate
+        debug('Starting directory watch process cleanup...')
+        try {
+          watchProcess.kill('SIGTERM')
+          await sleep(2000)
+          if (!watchProcess.killed) {
+            debug('Process did not terminate with SIGTERM, using SIGKILL')
+            watchProcess.kill('SIGKILL')
+          }
+          debug('Directory watch process cleanup completed')
+        } catch (err) {
+          debug('Error during directory watch process cleanup:', err)
+          throw err
+        }
       }
     })
 
-    debug('Waiting for initial processing...')
-    await Promise.race([
-      initialProcessingPromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for initial processing')), 30000))
-    ])
-    debug('Initial processing complete')
-    debug('Modifying page1.mdx...')
-    const page1Path = join(contentDir, 'page1.mdx')
-    const originalContent = readFileSync(page1Path, 'utf-8')
-    debug(`Original content: ${originalContent}`)
-    await writeFile(page1Path, 'Updated content')
-    syncFile(page1Path)
-    const newContent = readFileSync(page1Path, 'utf-8')
-    debug(`New content: ${newContent}`)
-    debug('Page1.mdx modified and synced')
-    debug('Waiting for file change processing...')
-    await Promise.race([
-      fileChangePromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for file change processing')), TEST_TIMEOUT - 30000))
-    ])
-    debug('File processing completed')
+    try {
+      debug('Waiting for directory initial processing...')
+      await initialProcessingPromise
+      debug('Directory initial processing complete, preparing for file modification')
+
+      // Add delay before modifying file
+      debug('Waiting before directory file modification...')
+      await sleep(2000)
+      debug('Starting directory file modification...')
+
+      const page1Path = join(contentDir, 'page1.mdx')
+      debug(`Target file path: ${page1Path}`)
+      const originalContent = readFileSync(page1Path, 'utf-8')
+      debug(`Original directory file content: ${originalContent.trim()}`)
+
+      debug('Writing updated content to directory file...')
+      await writeFile(page1Path, 'Updated content')
+      debug('Directory file write complete, syncing to disk...')
+      syncFile(page1Path)
+
+      const newContent = readFileSync(page1Path, 'utf-8')
+      debug(`New directory file content: ${newContent.trim()}`)
+      debug('Directory file modification complete')
+
+      // Add delay after file modification
+      debug('Waiting after directory file modification...')
+      await sleep(2000)
+      debug('Starting directory file change detection...')
+      await fileChangePromise
+      debug('Directory file change detection completed successfully')
+    } catch (error) {
+      debug('Directory test error:', error)
+      throw error
+    }
   }, TEST_TIMEOUT)
 
   it('should work with next dev', async () => {

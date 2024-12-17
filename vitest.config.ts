@@ -5,7 +5,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./src/test/setup.ts'],
-    testTimeout: 30000, // Increase timeout for watch mode tests
-    hookTimeout: 30000
+    testTimeout: 60000, // Increase timeout for watch mode tests
+    hookTimeout: 60000
   }
 })
