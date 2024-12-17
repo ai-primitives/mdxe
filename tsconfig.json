@@ -13,7 +13,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "next/*": ["./node_modules/next/*"]
+      "next/*": ["./node_modules/next/*"],
+      "@mdx-js/esbuild/wasm": ["./node_modules/@mdx-js/esbuild/lib/wasm.js"]
     },
     "esModuleInterop": true,
     "skipLibCheck": true,
