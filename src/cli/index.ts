@@ -178,14 +178,15 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       ignoreInitial: false,
       cwd: process.cwd(),
       awaitWriteFinish: {
-        stabilityThreshold: 300,
-        pollInterval: 100
+        stabilityThreshold: 1000, // Increased from 300ms
+        pollInterval: 300 // Increased from 100ms
       },
       usePolling: true,
-      interval: 100,
-      binaryInterval: 300,
+      interval: 300, // Increased from 100ms for more reliable detection
+      binaryInterval: 1000, // Increased from 300ms
       alwaysStat: true,
-      atomic: true
+      atomic: true,
+      followSymlinks: false // Added to prevent potential infinite loops
     })
 
     console.log('Watching for changes...')
@@ -231,7 +232,14 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       const absolutePath = resolve(process.cwd(), file)
       console.log(`File ${absolutePath} has been changed (${new Date().toISOString()})`)
       try {
-        await new Promise(resolve => setTimeout(resolve, 100))
+        // Add a small delay to ensure file is fully written
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        // Double check if file exists and is accessible
+        if (!existsSync(absolutePath)) {
+          console.log(`File ${absolutePath} no longer exists, skipping processing`)
+          return
+        }
 
         const stats = statSync(absolutePath)
         console.log('Changed file stats:', {

@@ -149,7 +149,7 @@ describe('Watch Mode', () => {
     })
 
     debug('Waiting for watcher initialization...')
-    await sleep(5000)
+    await sleep(10000) // Increase from 5000ms to 10000ms to ensure watcher is fully initialized
     debug('Initialization wait complete')
 
     debug('Modifying test file...')
