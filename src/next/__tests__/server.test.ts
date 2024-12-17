@@ -96,11 +96,19 @@ This page tests the production server functionality.
   afterAll(async () => {
     log('Cleaning up test environment...')
     try {
-      if (serverProcess && serverProcess.pid) {
-        process.kill(-serverProcess.pid, 'SIGTERM')
-        await setTimeout(2000)
-        if (!serverProcess.killed) {
-          process.kill(-serverProcess.pid, 'SIGKILL')
+      if (serverProcess) {
+        const pid = serverProcess.pid
+        if (pid) {
+          log(`Killing server process ${pid}`)
+          process.kill(-pid, 'SIGTERM')
+          await setTimeout(2000)
+          try {
+            process.kill(-pid, 0) // Check if process is still running
+            log(`Process ${pid} still running, sending SIGKILL`)
+            process.kill(-pid, 'SIGKILL')
+          } catch (e) {
+            log(`Process ${pid} already terminated`)
+          }
         }
       }
     } catch (e) {
@@ -119,6 +127,7 @@ This page tests the production server functionality.
       serverProcess = spawn('pnpm', ['start'], {
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: true,
+        env: { ...process.env, PORT: port.toString(), NODE_ENV: 'production' }
       })
 
       if (!serverProcess.stdout || !serverProcess.stderr) {
@@ -126,63 +135,72 @@ This page tests the production server functionality.
       }
 
       let serverStarted = false
+      let serverError: string | null = null
       const maxRetries = 5
       let retryCount = 0
-      let lastError: unknown = null
 
-      // Safe stream handling with type guards
-      const stdout = serverProcess.stdout
-      const stderr = serverProcess.stderr
+      // Capture server output
+      serverProcess.stdout.setEncoding('utf8')
+      serverProcess.stderr.setEncoding('utf8')
 
-      stdout.on('data', (data: Buffer) => {
-        const output = data.toString()
-        log('Server output:', output.trim())
+      serverProcess.stdout.on('data', (data: string) => {
+        const output = data.toString().trim()
+        log('Server stdout:', output)
         if (output.includes('ready started server')) {
           log('Server startup message detected')
           serverStarted = true
         }
       })
 
-      stderr.on('data', (data: Buffer) => {
+      serverProcess.stderr.on('data', (data: string) => {
         const error = data.toString().trim()
-        log('Server error:', error)
-        lastError = new Error(error)
+        log('Server stderr:', error)
+        serverError = error
       })
 
-      serverProcess.on('error', (error) => {
+      serverProcess.on('error', (error: Error) => {
         log('Server process error:', error)
-        lastError = error
+        serverError = error.message
       })
 
-      // Wait for initial startup
-      await setTimeout(5000)
+      serverProcess.on('exit', (code: number | null) => {
+        if (code !== null && code !== 0) {
+          log(`Server process exited with code ${code}`)
+          serverError = `Server process exited with code ${code}`
+        }
+      })
 
-      // Verify server is running
-      log('Verifying server process...')
+      // Initial startup delay
+      log('Waiting for initial server startup...')
+      await setTimeout(15000) // Increased initial delay to 15 seconds
+
+      // Verify server process is running
       if (!serverProcess.pid || serverProcess.killed) {
         throw new Error('Server process failed to start or was killed')
       }
 
       // Wait for server to start with verification
-      log('Waiting for server to start...')
       while (!serverStarted && retryCount < maxRetries) {
         try {
           log(`Attempt ${retryCount + 1}/${maxRetries} to connect to server...`)
           const response = await fetch(`http://localhost:${port}`)
+
           if (response.ok) {
-            log('Server is responding to requests')
             const html = await response.text()
+            log('Server responded successfully')
             expect(html).toContain('Production Server Test')
             expect(html).toContain('This page tests the production server functionality')
             serverStarted = true
             break
           }
         } catch (error) {
-          log(`Attempt ${retryCount + 1}/${maxRetries} failed:`, error)
+          log(`Connection attempt ${retryCount + 1} failed:`, error)
+          if (serverError) {
+            throw new Error(`Server failed to start: ${serverError}`)
+          }
           retryCount++
           if (retryCount === maxRetries) {
-            const errorMessage = lastError instanceof Error ? lastError.message : String(lastError)
-            throw new Error(`Server failed to start after ${maxRetries} attempts. ${errorMessage ? `Last error: ${errorMessage}` : ''}`)
+            throw new Error(`Server failed to start after ${maxRetries} attempts`)
           }
           await setTimeout(5000)
         }
@@ -194,5 +212,5 @@ This page tests the production server functionality.
     } finally {
       process.chdir(cwd)
     }
-  }, 120000) // 2 minutes for test
+  }, 120000)
 })
