@@ -11,9 +11,10 @@ const pkg = await import('../../package.json', { assert: { type: 'json' } })
 
 const explorer = cosmiconfig('mdxe')
 
-interface CliOptions extends MDXEConfig {
+interface CliOptions {
   version?: boolean
   help?: boolean
+  watch?: boolean
 }
 
 // Utility function for consistent error handling
@@ -65,7 +66,7 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
         jsx: true, // Ensure JSX is enabled for component imports
       },
     })
-    console.log('Processed:', filepath)
+    console.log('Successfully processed file:', filepath)
     return result
   } catch (error) {
     const errorMessage = formatError(error)
@@ -91,13 +92,17 @@ function startNextDev(config: MDXEConfig) {
 }
 
 export function parseArgs(args: string[]): CliOptions {
-  const options: CliOptions = {}
+  const options: CliOptions = {
+    watch: false
+  }
 
   for (const arg of args) {
     if (arg === '-v' || arg === '--version') {
       options.version = true
     } else if (arg === '-h' || arg === '--help') {
       options.help = true
+    } else if (arg === '--watch') {
+      options.watch = true
     }
   }
 
@@ -158,40 +163,108 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     nextProcess = startNextDev(config)
   }
 
-  if (isDirectory || config.watch?.enabled) {
+  // Merge CLI options with config
+  const watchEnabled = isDirectory || config.watch?.enabled || options.watch
+  if (watchEnabled) {
     const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
     const absolutePatterns = patterns.map(p => resolve(process.cwd(), p))
 
     console.log('Starting watcher with patterns:', absolutePatterns)
+    console.log('Working directory:', process.cwd())
+    console.log('Absolute filepath:', filepath)
+
+    // Verify file/directory exists before starting watcher
+    try {
+      const stats = statSync(filepath)
+      console.log('Target stats:', {
+        isDirectory: stats.isDirectory(),
+        size: stats.size,
+        mode: stats.mode,
+        mtime: stats.mtime
+      })
+    } catch (error) {
+      console.error('Error checking target:', formatError(error))
+      process.exit(1)
+    }
+
     const watcher = watch(absolutePatterns, {
       ignored: config.watch?.ignore,
       persistent: true,
       ignoreInitial: false,
       cwd: process.cwd(),
+      awaitWriteFinish: {
+        stabilityThreshold: 100, // Increased for more reliable detection
+        pollInterval: 50        // Increased to reduce CPU usage while maintaining reliability
+      },
+      usePolling: true,
+      interval: 100,           // Increased for better reliability
+      binaryInterval: 300,     // Increased to reduce resource usage
+      alwaysStat: true,        // Ensure file stats are always available
+      atomic: true             // Better handling of atomic writes
     })
 
     console.log('Watching for changes...')
-    watcher.on('ready', () => console.log('Initial scan complete'))
+    watcher.on('ready', () => {
+      const watched = watcher.getWatched()
+      console.log('Initial scan complete. Watching paths:', watched)
+      Object.keys(watched).forEach(dir => {
+        console.log(`- ${dir}:`, watched[dir])
+      })
+    })
+
+    // Add more detailed raw event logging
+    watcher.on('raw', (event, path, details) => {
+      console.log('Raw event detected:', {
+        event,
+        path,
+        details,
+        timestamp: new Date().toISOString(),
+        watcherState: {
+          closed: watcher.closed
+        }
+      })
+    })
+
     watcher.on('add', async (file) => {
       const absolutePath = resolve(process.cwd(), file)
-      console.log(`File ${absolutePath} has been added`)
+      console.log(`File ${absolutePath} has been added (${new Date().toISOString()})`)
       try {
+        const stats = statSync(absolutePath)
+        console.log('Added file stats:', {
+          size: stats.size,
+          mode: stats.mode,
+          mtime: stats.mtime
+        })
         await processMDXFile(absolutePath, config)
+        console.log('Successfully processed added file:', absolutePath)
       } catch (error) {
         const errorMessage = formatError(error)
         console.error(`Error processing added file: ${errorMessage}`)
       }
     })
+
     watcher.on('change', async (file) => {
       const absolutePath = resolve(process.cwd(), file)
-      console.log(`File ${absolutePath} has been changed`)
+      console.log(`File ${absolutePath} has been changed (${new Date().toISOString()})`)
       try {
+        // Add small delay to ensure file is fully written
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        const stats = statSync(absolutePath)
+        console.log('Changed file stats:', {
+          size: stats.size,
+          mode: stats.mode,
+          mtime: stats.mtime,
+          timestamp: new Date().toISOString()
+        })
         await processMDXFile(absolutePath, config)
+        console.log('Successfully processed changed file:', absolutePath)
       } catch (error) {
         const errorMessage = formatError(error)
         console.error(`Error processing changed file: ${errorMessage}`)
       }
     })
+
     watcher.on('error', (error) => {
       const errorMessage = formatError(error)
       console.error('Watcher error:', errorMessage)
