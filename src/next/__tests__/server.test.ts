@@ -11,9 +11,10 @@ const log = debug('mdxe:server-test')
 describe('Production Server', () => {
   const testDir = path.join(process.cwd(), 'test-next-server')
   const port = 3456
-  let serverProcess: ChildProcess
+  let serverProcess: ChildProcess | null = null
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    log('Setting up test environment...')
     // Create test directory and files
     fs.mkdirSync(testDir, { recursive: true })
     fs.mkdirSync(path.join(testDir, 'pages'), { recursive: true })
@@ -28,7 +29,9 @@ title: Production Test
 
 This page tests the production server functionality.
     `
-    fs.writeFileSync(path.join(testDir, 'pages', 'index.mdx'), mdxContent)
+    const mdxPath = path.join(testDir, 'pages', 'index.mdx')
+    log(`Creating test MDX file at ${mdxPath}`)
+    fs.writeFileSync(mdxPath, mdxContent)
 
     // Create next.config.js
     const nextConfig = `
@@ -42,31 +45,69 @@ This page tests the production server functionality.
         return plugin({})
       }
     `
-    fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
+    const configPath = path.join(testDir, 'next.config.js')
+    log(`Creating next.config.js at ${configPath}`)
+    fs.writeFileSync(configPath, nextConfig)
 
-    // Create package.json without type: module
+    // Create package.json with explicit dependencies
     const packageJson = {
       name: 'test-next-server',
       version: '1.0.0',
       private: true,
+      dependencies: {
+        next: '^14.0.0',
+        react: '^18.2.0',
+        'react-dom': '^18.2.0'
+      },
       scripts: {
         build: 'next build',
         start: `next start -p ${port}`,
       },
     }
-    fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
+    const packagePath = path.join(testDir, 'package.json')
+    log(`Creating package.json at ${packagePath}`)
+    fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2))
 
     // Install dependencies and build
     const cwd = process.cwd()
     process.chdir(testDir)
-    execSync('pnpm install next react react-dom', { stdio: 'inherit' })
-    execSync('pnpm build', { stdio: 'inherit' })
-    process.chdir(cwd)
-  })
+    try {
+      log('Installing dependencies...')
+      execSync('pnpm install', { stdio: 'inherit' })
 
-  afterAll(() => {
-    // Clean up test directory
+      log('Building Next.js application...')
+      execSync('pnpm build', { stdio: 'inherit' })
+
+      // Verify build output exists
+      const buildDir = path.join(testDir, '.next')
+      if (!fs.existsSync(buildDir)) {
+        throw new Error('Build directory .next not found')
+      }
+      log('Build completed successfully')
+    } catch (error) {
+      log('Error during setup:', error)
+      throw error
+    } finally {
+      process.chdir(cwd)
+    }
+    log('Test environment setup completed')
+  }, 180000) // 3 minutes for setup
+
+  afterAll(async () => {
+    log('Cleaning up test environment...')
+    try {
+      if (serverProcess && serverProcess.pid) {
+        process.kill(-serverProcess.pid, 'SIGTERM')
+        await setTimeout(2000)
+        if (!serverProcess.killed) {
+          process.kill(-serverProcess.pid, 'SIGKILL')
+        }
+      }
+    } catch (e) {
+      log('Error cleaning up server process:', e)
+    }
     fs.rmSync(testDir, { recursive: true, force: true })
+    log('Test environment cleanup completed')
   })
 
   it('should start production server successfully', async () => {
@@ -85,8 +126,9 @@ This page tests the production server functionality.
       }
 
       let serverStarted = false
-      const maxRetries = 3
+      const maxRetries = 5
       let retryCount = 0
+      let lastError: unknown = null
 
       // Safe stream handling with type guards
       const stdout = serverProcess.stdout
@@ -102,17 +144,28 @@ This page tests the production server functionality.
       })
 
       stderr.on('data', (data: Buffer) => {
-        log('Server error:', data.toString().trim())
+        const error = data.toString().trim()
+        log('Server error:', error)
+        lastError = new Error(error)
       })
 
       serverProcess.on('error', (error) => {
         log('Server process error:', error)
+        lastError = error
       })
+
+      // Wait for initial startup
+      await setTimeout(5000)
+
+      // Verify server is running
+      log('Verifying server process...')
+      if (!serverProcess.pid || serverProcess.killed) {
+        throw new Error('Server process failed to start or was killed')
+      }
 
       // Wait for server to start with verification
       log('Waiting for server to start...')
       while (!serverStarted && retryCount < maxRetries) {
-        await setTimeout(10000) // 10 second delay between checks
         try {
           log(`Attempt ${retryCount + 1}/${maxRetries} to connect to server...`)
           const response = await fetch(`http://localhost:${port}`)
@@ -128,35 +181,18 @@ This page tests the production server functionality.
           log(`Attempt ${retryCount + 1}/${maxRetries} failed:`, error)
           retryCount++
           if (retryCount === maxRetries) {
-            throw new Error(`Server failed to start after ${maxRetries} attempts`)
+            const errorMessage = lastError instanceof Error ? lastError.message : String(lastError)
+            throw new Error(`Server failed to start after ${maxRetries} attempts. ${errorMessage ? `Last error: ${errorMessage}` : ''}`)
           }
+          await setTimeout(5000)
         }
+      }
+
+      if (!serverStarted) {
+        throw new Error('Server failed to start properly')
       }
     } finally {
-      // Cleanup with proper stream handling
-      log('Cleaning up server process...')
-      try {
-        if (serverProcess) {
-          // Clean up streams
-          if (serverProcess.stdout) serverProcess.stdout.destroy()
-          if (serverProcess.stderr) serverProcess.stderr.destroy()
-
-          if (serverProcess.pid) {
-            process.kill(-serverProcess.pid, 'SIGTERM')
-            await setTimeout(2000) // Wait for process to terminate
-            if (serverProcess.killed) {
-              log('Server process terminated successfully')
-            } else {
-              log('Server process did not terminate with SIGTERM, using SIGKILL')
-              process.kill(-serverProcess.pid, 'SIGKILL')
-            }
-          }
-        }
-      } catch (e) {
-        log('Error cleaning up server process:', e)
-      } finally {
-        process.chdir(cwd)
-      }
+      process.chdir(cwd)
     }
-  }, 60000) // Increased timeout to 60 seconds
+  }, 120000) // 2 minutes for test
 })
