@@ -31,7 +31,7 @@ async function cleanupTestFiles() {
       debug('Test directory removed:', testDir)
     }
     // Wait a bit to ensure cleanup is complete
-    await sleep(1000)
+    await sleep(2000)
     debug('Cleanup complete')
   } catch (error) {
     console.error('Error during cleanup:', error)

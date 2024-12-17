@@ -4,6 +4,7 @@ import { resolve, extname, dirname } from 'path'
 import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
 import { spawn, type ChildProcess } from 'child_process'
+import debug from 'debug'
 import type { MDXEConfig } from './config.js'
 
 // Import package.json with type assertion for ESM compatibility
@@ -168,24 +169,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
   if (watchEnabled) {
     const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
     const absolutePatterns = patterns.map(p => resolve(process.cwd(), p))
-
-    console.log('Starting watcher with patterns:', absolutePatterns)
-    console.log('Working directory:', process.cwd())
-    console.log('Absolute filepath:', filepath)
-
-    // Verify file/directory exists before starting watcher
-    try {
-      const stats = statSync(filepath)
-      console.log('Target stats:', {
-        isDirectory: stats.isDirectory(),
-        size: stats.size,
-        mode: stats.mode,
-        mtime: stats.mtime
-      })
-    } catch (error) {
-      console.error('Error checking target:', formatError(error))
-      process.exit(1)
-    }
+    const log = debug('mdxe:cli')
+    log('Starting watcher with patterns:', absolutePatterns)
 
     const watcher = watch(absolutePatterns, {
       ignored: config.watch?.ignore,
@@ -193,14 +178,14 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       ignoreInitial: false,
       cwd: process.cwd(),
       awaitWriteFinish: {
-        stabilityThreshold: 100, // Increased for more reliable detection
-        pollInterval: 50        // Increased to reduce CPU usage while maintaining reliability
+        stabilityThreshold: 300,
+        pollInterval: 100
       },
       usePolling: true,
-      interval: 100,           // Increased for better reliability
-      binaryInterval: 300,     // Increased to reduce resource usage
-      alwaysStat: true,        // Ensure file stats are always available
-      atomic: true             // Better handling of atomic writes
+      interval: 100,
+      binaryInterval: 300,
+      alwaysStat: true,
+      atomic: true
     })
 
     console.log('Watching for changes...')
@@ -212,7 +197,6 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       })
     })
 
-    // Add more detailed raw event logging
     watcher.on('raw', (event, path, details) => {
       console.log('Raw event detected:', {
         event,
@@ -247,7 +231,6 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       const absolutePath = resolve(process.cwd(), file)
       console.log(`File ${absolutePath} has been changed (${new Date().toISOString()})`)
       try {
-        // Add small delay to ensure file is fully written
         await new Promise(resolve => setTimeout(resolve, 100))
 
         const stats = statSync(absolutePath)
@@ -270,7 +253,6 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       console.error('Watcher error:', errorMessage)
     })
 
-    // Handle cleanup
     process.on('SIGINT', () => {
       watcher.close()
       if (nextProcess) {
