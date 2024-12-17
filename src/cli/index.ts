@@ -177,8 +177,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       console.log(`File ${absolutePath} has been added`)
       try {
         await processMDXFile(absolutePath, config)
-      } catch (error) {
-        const errorMessage = formatError(error)
+      } catch (err: unknown) {
+        const errorMessage = formatError(err)
         console.error(`Error processing added file: ${errorMessage}`)
       }
     })
@@ -187,8 +187,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       console.log(`File ${absolutePath} has been changed`)
       try {
         await processMDXFile(absolutePath, config)
-      } catch (error) {
-        const errorMessage = formatError(error)
+      } catch (err: unknown) {
+        const errorMessage = formatError(err)
         console.error(`Error processing changed file: ${errorMessage}`)
       }
     })

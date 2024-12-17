@@ -11,6 +11,14 @@
       "require": "./dist/index.js",
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./esbuild": {
+      "import": "./dist/esbuild/index.js",
+      "types": "./dist/esbuild/index.d.ts"
+    },
+    "./esbuild/wasm": {
+      "import": "./dist/esbuild/wasm.js",
+      "types": "./dist/esbuild/wasm.d.ts"
     }
   },
   "bin": {
@@ -53,6 +61,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@mdx-js/esbuild": "^3.1.0",
     "@mdx-js/loader": "^3.1.0",
     "@mdx-js/react": "^3.1.0",
     "@semantic-release/commit-analyzer": "^13.0.0",
@@ -68,6 +77,8 @@
     "autoprefixer": "^10.4.20",
     "chokidar": "^4.0.1",
     "cosmiconfig": "^9.0.0",
+    "esbuild": "^0.24.0",
+    "esbuild-wasm": "^0.24.0",
     "eslint": "^9.17.0",
     "node-fetch": "^3.3.2",
     "postcss": "^8.4.49",
@@ -77,5 +88,8 @@
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "webpack": "^5.97.1"
+  },
+  "peerDependencies": {
+    "@mdx-js/esbuild": "^3.0.0"
   }
 }

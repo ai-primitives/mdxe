@@ -1,3 +1,11 @@
+# TODO
+
+## Recently Added
+- esbuild plugin support
+  - Node.js support via `mdxe/esbuild`
+  - Browser/Edge support via `mdxe/esbuild/wasm`
+  - HTTP import support
+
 # Project Status and Tasks
 
 ## Core Features
