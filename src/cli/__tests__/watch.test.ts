@@ -1,9 +1,9 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
+import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
 import { mkdirSync, writeFileSync, rmSync, openSync, closeSync } from 'fs'
 import fetch from 'node-fetch'
-import { sleep, debug } from '../../test/setup'
+import { sleep, debug } from '../../test/setup.js'
 
 describe('Watch Mode', () => {
   const testDir = join(process.cwd(), 'test-watch-mode')

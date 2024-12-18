@@ -18,7 +18,7 @@ interface CliOptions extends MDXEConfig {
 
 // Utility function for consistent error handling
 function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return String(error instanceof Error ? error.message : error)
 }
 
 async function loadConfig(): Promise<MDXEConfig> {
@@ -182,8 +182,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error('Error processing added file:', errorMessage)
+        const errorMsg = formatError(error)
+        console.error(`Error processing added file: ${errorMsg}`)
       }
     })
     watcher.on('change', async (filePath: string | Error) => {
@@ -196,13 +196,13 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error('Error processing changed file:', errorMessage)
+        const errorMsg = formatError(error)
+        console.error(`Error processing changed file: ${errorMsg}`)
       }
     })
-    watcher.on('error', (error) => {
-      const errorMessage = formatError(error)
-      console.error('Watcher error:', errorMessage)
+    watcher.on('error', (error: unknown) => {
+      const errorMsg = formatError(error)
+      console.error('Watcher error:', errorMsg)
     })
 
     // Handle cleanup

@@ -6,15 +6,7 @@ import { debug } from '../../test/setup.js'
 
 describe('Next.js Production Build', () => {
   const testDir = path.join(process.cwd(), 'test-next-build')
-  const mdxContent = `
----
-title: Test Page
----
-
-# Hello World
-
-This is a test MDX file.
-  `
+  // PLACEHOLDER: Rest of the test setup and implementation
 
   const customComponent = `
 import React from 'react'
