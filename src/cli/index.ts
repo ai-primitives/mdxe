@@ -172,22 +172,24 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
     console.log('Watching for changes...')
     watcher.on('ready', () => console.log('Initial scan complete'))
-    watcher.on('add', async (file) => {
+    watcher.on('add', async (file: string) => {
       const absolutePath = resolve(process.cwd(), file)
       console.log(`File ${absolutePath} has been added`)
       try {
         await processMDXFile(absolutePath, config)
       } catch (error: unknown) {
-        console.error(`Error processing added file: ${formatError(error)}`)
+        const errorMessage = typeof error === 'string' ? error : error instanceof Error ? error.message : String(error)
+        console.error(`Error processing added file: ${errorMessage}`)
       }
     })
-    watcher.on('change', async (file) => {
+    watcher.on('change', async (file: string) => {
       const absolutePath = resolve(process.cwd(), file)
       console.log(`File ${absolutePath} has been changed`)
       try {
         await processMDXFile(absolutePath, config)
       } catch (error: unknown) {
-        console.error(`Error processing changed file: ${formatError(error)}`)
+        const errorMessage = typeof error === 'string' ? error : error instanceof Error ? error.message : String(error)
+        console.error(`Error processing changed file: ${errorMessage}`)
       }
     })
     watcher.on('error', (error) => {
