@@ -3,6 +3,7 @@ import matter from 'gray-matter'
 import { readFileSync } from 'fs'
 import type { CompileOptions } from '@mdx-js/mdx'
 import { resolveRemoteImport, fetchRemoteComponent } from './remote.js'
+import { getTypeConfig } from '../contexts/types.js'
 
 interface MDXProcessorOptions {
   filepath: string
@@ -60,6 +61,11 @@ export async function processMDX({ filepath, content, components, layout, compil
       (acc, [key, value]) => {
         if (key.startsWith('$') || key.startsWith('@')) {
           acc[key] = value
+          if (key === '$type') {
+            const typeConfig = getTypeConfig(String(value))
+            if (typeConfig.layout) acc['$layout'] = typeConfig.layout
+            if (typeConfig.components) acc['$components'] = typeConfig.components
+          }
           delete frontmatter[key]
         }
         return acc
