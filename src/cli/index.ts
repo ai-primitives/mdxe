@@ -178,7 +178,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error) {
-        console.error(`Error processing added file: ${formatError(error)}`)
+        const errorMsg = formatError(error)
+        console.error(`Error processing added file: ${errorMsg}`)
       }
     })
     watcher.on('change', async (file) => {
@@ -187,11 +188,13 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error) {
-        console.error(`Error processing changed file: ${formatError(error)}`)
+        const errorMsg = formatError(error)
+        console.error(`Error processing changed file: ${errorMsg}`)
       }
     })
     watcher.on('error', (error) => {
-      console.error('Watcher error:', formatError(error))
+      const errorMsg = formatError(error)
+      console.error('Watcher error:', errorMsg)
     })
 
     // Handle cleanup
