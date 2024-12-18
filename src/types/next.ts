@@ -1,26 +1,9 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { NextConfig } from 'next'
 import type { Configuration as WebpackConfig } from 'webpack'
+import type { WebpackConfigContext as NextWebpackConfigContext } from 'next/dist/server/config-shared.js'
 
-// Define WebpackConfigContext to match Next.js structure
-export interface WebpackConfigContext {
-  dir: string
-  dev: boolean
-  isServer: boolean
-  buildId: string
-  config: NextConfig & {
-    [key: string]: unknown
-    webpack?: (config: WebpackConfig, context: WebpackConfigContext) => WebpackConfig
-  }
-  defaultLoaders: {
-    babel: {
-      loader: string
-      options: Record<string, unknown>
-    }
-  }
-  totalPages: number
-  webpack: WebpackConfig
-  nextRuntime?: 'nodejs' | 'edge'
-}
+export type { NextWebpackConfigContext as WebpackConfigContext }
 
 // Augment the existing NextConfig interface
 declare module 'next' {
