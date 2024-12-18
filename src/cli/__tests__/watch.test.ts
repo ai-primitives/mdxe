@@ -73,11 +73,7 @@ module.exports = withMDXE({})
     const args = ['--watch', absolutePath]
 
     // Create initial file
-    writeFileSync(
-      absolutePath,
-      `# Initial Test\nThis is a test file.\n`,
-      'utf-8'
-    )
+    writeFileSync(absolutePath, `# Initial Test\nThis is a test file.\n`, 'utf-8')
 
     // Ensure file exists before starting watch
     await sleep(1000)
@@ -137,7 +133,7 @@ This is an updated test file.
 
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      detached: true
+      detached: true,
     })
 
     if (!watchProcess.stdout) {

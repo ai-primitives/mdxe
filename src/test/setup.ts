@@ -22,8 +22,7 @@ export const cleanupTempDir = (dirPath: string): void => {
 globalThis.fetch = vi.fn() as unknown as typeof globalThis.fetch
 globalThis.Response = vi.fn() as unknown as typeof globalThis.Response
 
-export const sleep = (ms: number): Promise<void> =>
-  new Promise(resolve => setTimeout(resolve, ms))
+export const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 beforeEach(() => {
   vi.resetAllMocks()

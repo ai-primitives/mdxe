@@ -14,6 +14,7 @@ Zero-config MDX processor with NextJS integration, supporting both standalone CL
 - 🔄 File watching and hot reload
 - 📝 App Router metadata support
 - 🌐 Remote component imports (esm.sh)
+- 🤖 AI-powered content generation
 
 ## Installation
 
@@ -79,6 +80,24 @@ export default {
   components: './components',
 }
 ```
+
+## AI Generation
+
+Generate components, pages, and complete sites using AI:
+
+```typescript
+import { generateMDX } from 'mdxe/ai'
+
+const stream = await generateMDX({
+  type: 'https://mdx.org.ai/Component',
+  component: 'Button',
+  content: 'Primary action button',
+})
+
+// Note: ShadCN component integration is planned for a future release.
+```
+
+See [AI Generation](./docs/ai-generation.md) for complete documentation.
 
 ## Development
 

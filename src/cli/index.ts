@@ -160,7 +160,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   if (isDirectory || config.watch?.enabled) {
     const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
-    const absolutePatterns = patterns.map(p => resolve(process.cwd(), p))
+    const absolutePatterns = patterns.map((p) => resolve(process.cwd(), p))
 
     console.log('Starting watcher with patterns:', absolutePatterns)
     const watcher = watch(absolutePatterns, {
@@ -172,24 +172,32 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
     console.log('Watching for changes...')
     watcher.on('ready', () => console.log('Initial scan complete'))
-    watcher.on('add', async (file) => {
-      const absolutePath = resolve(process.cwd(), file)
+    watcher.on('add', async (filePath: string | Error) => {
+      if (filePath instanceof Error) {
+        console.error('Error in watch handler:', filePath.message)
+        return
+      }
+      const absolutePath = resolve(process.cwd(), filePath)
       console.log(`File ${absolutePath} has been added`)
       try {
         await processMDXFile(absolutePath, config)
-      } catch (error) {
-        const errorMessage = formatError(error)
-        console.error(`Error processing added file: ${errorMessage}`)
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error('Error processing added file:', errorMessage)
       }
     })
-    watcher.on('change', async (file) => {
-      const absolutePath = resolve(process.cwd(), file)
+    watcher.on('change', async (filePath: string | Error) => {
+      if (filePath instanceof Error) {
+        console.error('Error in watch handler:', filePath.message)
+        return
+      }
+      const absolutePath = resolve(process.cwd(), filePath)
       console.log(`File ${absolutePath} has been changed`)
       try {
         await processMDXFile(absolutePath, config)
-      } catch (error) {
-        const errorMessage = formatError(error)
-        console.error(`Error processing changed file: ${errorMessage}`)
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error('Error processing changed file:', errorMessage)
       }
     })
     watcher.on('error', (error) => {
