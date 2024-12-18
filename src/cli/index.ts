@@ -178,8 +178,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error: unknown) {
-        const errorMessage = typeof error === 'string' ? error : error instanceof Error ? error.message : String(error)
-        console.error(`Error processing added file: ${errorMessage}`)
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error('Error processing added file:', errorMessage)
       }
     })
     watcher.on('change', async (file: string) => {
@@ -188,8 +188,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error: unknown) {
-        const errorMessage = typeof error === 'string' ? error : error instanceof Error ? error.message : String(error)
-        console.error(`Error processing changed file: ${errorMessage}`)
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error('Error processing changed file:', errorMessage)
       }
     })
     watcher.on('error', (error) => {
