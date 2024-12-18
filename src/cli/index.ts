@@ -172,8 +172,12 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
     console.log('Watching for changes...')
     watcher.on('ready', () => console.log('Initial scan complete'))
-    watcher.on('add', async (file) => {
-      const absolutePath = resolve(process.cwd(), file)
+    watcher.on('add', async (filePath: string | Error) => {
+      if (filePath instanceof Error) {
+        console.error('Error in watch handler:', filePath.message)
+        return
+      }
+      const absolutePath = resolve(process.cwd(), filePath)
       console.log(`File ${absolutePath} has been added`)
       try {
         await processMDXFile(absolutePath, config)
@@ -182,8 +186,12 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
         console.error(`Error processing added file: ${errorMsg}`)
       }
     })
-    watcher.on('change', async (file) => {
-      const absolutePath = resolve(process.cwd(), file)
+    watcher.on('change', async (filePath: string | Error) => {
+      if (filePath instanceof Error) {
+        console.error('Error in watch handler:', filePath.message)
+        return
+      }
+      const absolutePath = resolve(process.cwd(), filePath)
       console.log(`File ${absolutePath} has been changed`)
       try {
         await processMDXFile(absolutePath, config)
