@@ -160,7 +160,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   if (isDirectory || config.watch?.enabled) {
     const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
-    const absolutePatterns = patterns.map(p => resolve(process.cwd(), p))
+    const absolutePatterns = patterns.map((p) => resolve(process.cwd(), p))
 
     console.log('Starting watcher with patterns:', absolutePatterns)
     const watcher = watch(absolutePatterns, {
@@ -178,8 +178,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error) {
-        const errorMessage = formatError(error)
-        console.error(`Error processing added file: ${errorMessage}`)
+        console.error(`Error processing added file: ${formatError(error)}`)
       }
     })
     watcher.on('change', async (file) => {
@@ -188,13 +187,11 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       try {
         await processMDXFile(absolutePath, config)
       } catch (error) {
-        const errorMessage = formatError(error)
-        console.error(`Error processing changed file: ${errorMessage}`)
+        console.error(`Error processing changed file: ${formatError(error)}`)
       }
     })
     watcher.on('error', (error) => {
-      const errorMessage = formatError(error)
-      console.error('Watcher error:', errorMessage)
+      console.error('Watcher error:', formatError(error))
     })
 
     // Handle cleanup

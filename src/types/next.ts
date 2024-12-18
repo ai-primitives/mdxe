@@ -1,4 +1,3 @@
-import type { NextConfig } from 'next'
 import type { Configuration as WebpackConfig } from 'webpack'
 
 // Augment the existing NextConfig interface
@@ -24,16 +23,16 @@ export interface WebpackConfigContext {
   dev: boolean
   isServer: boolean
   buildId: string
-  config: any
+  config: WebpackConfig
   defaultLoaders: {
     babel: {
       loader: string
-      options: Record<string, any>
+      options: Record<string, unknown>
     }
   }
   totalPages: number
-  webpack: any
+  webpack: WebpackConfig
   nextRuntime?: 'nodejs' | 'edge'
 }
 
-export {};
+export {}

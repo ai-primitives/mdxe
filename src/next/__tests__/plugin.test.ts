@@ -6,15 +6,7 @@ import { debug } from '../../test/setup.js'
 
 describe('Next.js Production Build', () => {
   const testDir = path.join(process.cwd(), 'test-next-build')
-  const mdxContent = `
----
-title: Test Page
----
-
-# Hello World
-
-This is a test MDX file.
-  `
+  // PLACEHOLDER: Rest of the test setup and implementation
 
   const customComponent = `
 import React from 'react'
@@ -116,15 +108,15 @@ This page demonstrates style customization and component imports.
         private: true,
         scripts: {
           build: 'next build',
-          start: 'next start'
+          start: 'next start',
         },
         dependencies: {
           next: '^14.0.0',
           react: '^18.2.0',
           'react-dom': '^18.2.0',
           '@types/react': '^18.2.0',
-          '@types/react-dom': '^18.2.0'
-        }
+          '@types/react-dom': '^18.2.0',
+        },
       }
       fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
 
@@ -153,10 +145,10 @@ export default function App({ Component, pageProps }) {
           moduleResolution: 'node',
           resolveJsonModule: true,
           isolatedModules: true,
-          jsx: 'preserve'
+          jsx: 'preserve',
         },
         include: ['next-env.d.ts', '**/*.ts', '**/*.tsx', '**/*.mdx'],
-        exclude: ['node_modules']
+        exclude: ['node_modules'],
       }
       fs.writeFileSync(path.join(testDir, 'tsconfig.json'), JSON.stringify(tsConfig, null, 2))
     } catch (error) {
@@ -192,7 +184,7 @@ export default function App({ Component, pageProps }) {
       expect(fs.existsSync(buildDir)).toBe(true)
 
       const serverDir = path.join(buildDir, 'server')
-      const cssFiles = fs.readdirSync(serverDir).filter(file => file.endsWith('.css'))
+      const cssFiles = fs.readdirSync(serverDir).filter((file) => file.endsWith('.css'))
       expect(cssFiles.length).toBeGreaterThan(0)
 
       const cssContent = fs.readFileSync(path.join(serverDir, cssFiles[0]), 'utf-8')

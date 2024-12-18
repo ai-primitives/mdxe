@@ -1,10 +1,9 @@
 import { vi, beforeEach } from 'vitest'
-import fs from 'fs'
 import path from 'path'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 
-export const debug = (...args: any[]): void => {
+export const debug = (...args: unknown[]): void => {
   console.log('[Test Debug]', ...args)
 }
 
@@ -22,8 +21,7 @@ export const cleanupTempDir = (dirPath: string): void => {
 globalThis.fetch = vi.fn() as unknown as typeof globalThis.fetch
 globalThis.Response = vi.fn() as unknown as typeof globalThis.Response
 
-export const sleep = (ms: number): Promise<void> =>
-  new Promise(resolve => setTimeout(resolve, ms))
+export const sleep = (ms: number): Promise<void> => new Promise((resolve) => globalThis.setTimeout(resolve, ms))
 
 beforeEach(() => {
   vi.resetAllMocks()
