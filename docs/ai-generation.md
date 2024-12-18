@@ -27,7 +27,7 @@ const stream = await generateMDX({
 })
 ```
 
-All components are automatically imported from @mdxui/shadcn.
+> Note: ShadCN component integration is planned for a future release and will be available through @mdxui/shadcn package.
 
 ## Pages
 

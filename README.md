@@ -93,6 +93,8 @@ const stream = await generateMDX({
   component: 'Button',
   content: 'Primary action button',
 })
+
+// Note: ShadCN component integration is planned for a future release.
 ```
 
 See [AI Generation](./docs/ai-generation.md) for complete documentation.
