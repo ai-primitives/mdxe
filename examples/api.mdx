@@ -4,8 +4,4 @@ title: Simple API Example
 description: Demonstrates a basic API endpoint using mdxe
 ---
 
-export const GET = async (req, res) => {
-  return res.status(200).json({
-    message: 'Hello from mdxe API'
-  })
-}
+export const GET = (request) => Response.json({ hello: 'world' })
