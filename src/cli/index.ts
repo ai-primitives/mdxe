@@ -18,7 +18,7 @@ interface CliOptions extends MDXEConfig {
 
 // Utility function for consistent error handling
 function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return String(error instanceof Error ? error.message : error)
 }
 
 async function loadConfig(): Promise<MDXEConfig> {
