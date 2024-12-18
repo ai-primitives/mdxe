@@ -160,7 +160,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   if (isDirectory || config.watch?.enabled) {
     const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
-    const absolutePatterns = patterns.map(p => resolve(process.cwd(), p))
+    const absolutePatterns = patterns.map((p) => resolve(process.cwd(), p))
 
     console.log('Starting watcher with patterns:', absolutePatterns)
     const watcher = watch(absolutePatterns, {

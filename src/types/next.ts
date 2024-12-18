@@ -36,4 +36,4 @@ export interface WebpackConfigContext {
   nextRuntime?: 'nodejs' | 'edge'
 }
 
-export {};
+export {}
