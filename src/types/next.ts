@@ -1,5 +1,26 @@
 import type { Configuration as WebpackConfig } from 'webpack'
 
+// Define our own WebpackConfigContext based on Next.js documentation
+export interface WebpackConfigContext {
+  dir: string
+  dev: boolean
+  isServer: boolean
+  buildId: string
+  config: {
+    [key: string]: unknown
+    webpack?: WebpackConfig
+  }
+  defaultLoaders: {
+    babel: {
+      loader: string
+      options: Record<string, unknown>
+    }
+  }
+  totalPages: number
+  webpack: WebpackConfig
+  nextRuntime?: 'nodejs' | 'edge'
+}
+
 // Augment the existing NextConfig interface
 declare module 'next' {
   interface NextConfig {
@@ -17,22 +38,6 @@ declare module 'next' {
   }
 }
 
-// Use Next.js webpack configuration context type
-export interface WebpackConfigContext {
-  dir: string
-  dev: boolean
-  isServer: boolean
-  buildId: string
-  config: WebpackConfig
-  defaultLoaders: {
-    babel: {
-      loader: string
-      options: Record<string, unknown>
-    }
-  }
-  totalPages: number
-  webpack: WebpackConfig
-  nextRuntime?: 'nodejs' | 'edge'
-}
+export type { WebpackConfig }
 
 export {}

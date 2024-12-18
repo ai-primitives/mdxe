@@ -29,7 +29,7 @@ export function withMDXE(nextConfig: NextConfig = {}, pluginOptions: MDXEPluginO
     // Preserve existing pageExtensions or default to ['tsx', 'ts', 'jsx', 'js']
     pageExtensions: [...(nextConfig.pageExtensions || ['tsx', 'ts', 'jsx', 'js']), 'mdx', 'md'],
 
-    webpack(config: WebpackConfig, options: WebpackConfigContext) {
+    webpack(config: WebpackConfig, options: WebpackConfigContext): WebpackConfig {
       // Ensure module and rules exist
       if (!config.module) {
         config.module = { rules: [] }
