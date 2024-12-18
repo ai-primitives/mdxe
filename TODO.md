@@ -66,10 +66,12 @@
 The following lint issues exist in the codebase but are unrelated to recent changes:
 
 1. Unused Variables in Test Files:
+
    - `src/cli/__tests__/watch.test.ts`: 'vi' is defined but never used
    - `src/next/__tests__/plugin.test.ts`: 'mdxContent' is assigned but never used
 
 2. Type Definition Issues in `src/types/next.ts`:
+
    - Unused types: 'NextConfig', 'WebpackConfig'
    - Multiple instances of 'any' type usage requiring specification
 
@@ -79,6 +81,7 @@ The following lint issues exist in the codebase but are unrelated to recent chan
    - 'any' type usage requiring specification
 
 To reproduce:
+
 1. Run `pnpm install` to install dependencies
 2. Run `pnpm lint` to see the errors
 
