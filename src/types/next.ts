@@ -1,14 +1,15 @@
+import type { NextConfig } from 'next'
 import type { Configuration as WebpackConfig } from 'webpack'
 
-// Define our own WebpackConfigContext based on Next.js documentation
+// Define WebpackConfigContext to match Next.js structure
 export interface WebpackConfigContext {
   dir: string
   dev: boolean
   isServer: boolean
   buildId: string
-  config: {
+  config: NextConfig & {
     [key: string]: unknown
-    webpack?: WebpackConfig
+    webpack?: (config: WebpackConfig, context: WebpackConfigContext) => WebpackConfig
   }
   defaultLoaders: {
     babel: {
