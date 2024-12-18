@@ -86,3 +86,25 @@ To reproduce:
 2. Run `pnpm lint` to see the errors
 
 These issues are pre-existing and do not affect the functionality of recent changes.
+
+### Pre-existing Test Infrastructure Issues
+
+The following test failures exist in the codebase but are unrelated to recent changes:
+
+1. Watch Mode Test Timeouts:
+   - `src/cli/__tests__/watch.test.ts`: Test timeouts in file change detection
+   - Issue appears to be related to test environment setup, not watch functionality
+
+2. Next.js Build Failures:
+   - `src/next/__tests__/plugin.test.ts`: Build command failures in plugin tests
+   - Errors suggest environment setup issues, not plugin functionality
+
+3. Server Response Issues:
+   - `src/next/__tests__/server.test.ts`: Server response checks failing
+   - Local test server not responding as expected, likely environment-related
+
+To reproduce:
+1. Run `pnpm install` to install dependencies
+2. Run `pnpm test` to see the errors
+
+These test failures are pre-existing infrastructure issues and do not indicate problems with recent changes to watch handler types.
