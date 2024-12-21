@@ -36,13 +36,18 @@ describe('Production Server', () => {
 
     // Create test MDX file
     const mdxContent = `
----
-title: Production Test
----
+export const metadata = {
+  title: 'Production Test'
+}
 
-# Production Server Test
-
-This page tests the production server functionality.
+export default function Page() {
+  return (
+    <div>
+      <h1>Production Server Test</h1>
+      <p>This page tests the production server functionality.</p>
+    </div>
+  )
+}
     `
     fs.writeFileSync(path.join(testDir, 'app', 'page.mdx'), mdxContent)
 
@@ -55,14 +60,16 @@ This page tests the production server functionality.
 
       /** @type {import('next').NextConfig} */
       const config = {
+        pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
         experimental: {
-          appDir: true
+          webpackBuildWorker: true
         }
       }
 
       module.exports = async () => {
         const plugin = await withMDXE()
-        return plugin(config)
+        const withMDX = (await import('@next/mdx')).default()
+        return withMDX(plugin(config))
       }
     `
     fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
@@ -79,7 +86,10 @@ This page tests the production server functionality.
       dependencies: {
         next: '14.0.0',
         react: '18.2.0',
-        'react-dom': '18.2.0'
+        'react-dom': '18.2.0',
+        '@next/mdx': '14.0.0',
+        '@mdx-js/react': '3.0.0',
+        '@types/mdx': '2.0.0'
       }
     }
     fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))

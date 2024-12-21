@@ -38,17 +38,21 @@ export default function CustomButton({ children }) {
 `
 
   const styledMdxContent = `
----
-title: Styled Test Page
----
-
 import CustomButton from '../components/CustomButton'
 
-# Welcome to Styled MDX
+export const metadata = {
+  title: 'Styled Test Page'
+}
 
-This page demonstrates style customization and component imports.
-
-<CustomButton>Click me!</CustomButton>
+export default function Page() {
+  return (
+    <div>
+      <h1>Welcome to Styled MDX</h1>
+      <p>This page demonstrates style customization and component imports.</p>
+      <CustomButton>Click me!</CustomButton>
+    </div>
+  )
+}
 `
 
   beforeAll(() => {
@@ -116,24 +120,27 @@ This page demonstrates style customization and component imports.
 
       debug('Creating Next.js configuration...')
       const nextConfig = `
+        import createMDXPlugin from '@next/mdx'
         import { withMDXE } from '${process.cwd()}/dist/index.js'
 
-        /** @type {import('next').NextConfig} */
-        const config = {
-          pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
-          experimental: {
-            mdxRs: true
-          }
-        }
-
-        export default withMDXE({
-          ...config,
-          mdx: {
+        const withMDX = createMDXPlugin({
+          extension: /\.mdx?$/,
+          options: {
             remarkPlugins: [],
             rehypePlugins: [],
             providerImportSource: '@mdx-js/react'
           }
         })
+
+        /** @type {import('next').NextConfig} */
+        const config = {
+          pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
+          experimental: {
+            webpackBuildWorker: true
+          }
+        }
+
+        export default withMDX(withMDXE(config))
       `
       fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 
@@ -153,6 +160,9 @@ This page demonstrates style customization and component imports.
           'react-dom': '^18.2.0',
           '@types/react': '^18.2.0',
           '@types/react-dom': '^18.2.0',
+          '@next/mdx': '^14.0.0',
+          '@mdx-js/react': '^3.0.0',
+          '@types/mdx': '^2.0.0',
         },
       }
       fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
