@@ -11,7 +11,7 @@ describe('Production Server', () => {
   const port = 3456
   let serverProcess: ChildProcess
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Create test directory and files
     fs.mkdirSync(testDir, { recursive: true })
     fs.mkdirSync(path.join(testDir, 'pages'), { recursive: true })
@@ -42,7 +42,7 @@ This page tests the production server functionality.
     `
     fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 
-    // Create package.json without type: module
+    // Create package.json with all necessary configuration
     const packageJson = {
       name: 'test-next-server',
       version: '1.0.0',
@@ -51,22 +51,34 @@ This page tests the production server functionality.
         build: 'next build',
         start: `next start -p ${port}`,
       },
+      dependencies: {
+        next: '14.0.0',
+        react: '18.2.0',
+        'react-dom': '18.2.0'
+      }
     }
     fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
 
     // Install dependencies and build
     const cwd = process.cwd()
     process.chdir(testDir)
-    execSync('pnpm install next@14.0.0 react@18.2.0 react-dom@18.2.0', { stdio: 'inherit' })
+    
+    debug('Installing dependencies...')
+    execSync('pnpm install', { stdio: 'inherit' })
+
+    debug('Running build...')
     try {
-      execSync('pnpm build', { stdio: ['pipe', 'pipe', 'pipe'] })
+      execSync('pnpm exec next build', { stdio: ['pipe', 'pipe', 'pipe'] })
     } catch (error) {
       if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
         const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
-        console.error('Build error details:', execError.stdout?.toString(), execError.stderr?.toString())
+        debug('Build error details:', execError.stdout?.toString(), execError.stderr?.toString())
       }
       throw error
     }
+
+    // Add a small delay after build to ensure everything is ready
+    await new Promise(resolve => setTimeout(resolve, 2000))
     process.chdir(cwd)
   })
 
