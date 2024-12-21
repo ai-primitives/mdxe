@@ -112,12 +112,13 @@ module.exports = withMDXE({})
       cwd: process.cwd(),
       env: {
         ...process.env,
-        DEBUG: '*',
+        DEBUG: 'mdxe:*',
         FORCE_COLOR: '0',
         NODE_ENV: 'test',
-        NODE_DEBUG: 'fs,watch,stream'
+        NODE_DEBUG: 'fs,watch'
       } as NodeJS.ProcessEnv,
-      windowsHide: true
+      windowsHide: true,
+      shell: false
     })
     log.proc('Started watch process:', { pid: watchProcess.pid })
 
@@ -133,9 +134,9 @@ module.exports = withMDXE({})
     stdout.on('data', (data) => {
       const output = data.toString()
       debug('Watch process output:', output)
-      if (output.includes('has been changed') || output.includes('Successfully processed file:')) {
+      if (output.includes('Processing file:') || output.includes('File changed:') || output.includes('Watch target:')) {
         hasProcessedFile = true
-        debug('File change or process success detected')
+        debug('File change or process success detected:', output.trim())
       }
     })
 
@@ -148,26 +149,71 @@ module.exports = withMDXE({})
       debug('Watch process error:', data.toString())
     })
 
-    // Wait for watcher to be ready
+    // Wait for watcher to be ready with enhanced logging
     debug('Waiting for watcher to be ready...')
     
     await new Promise<void>((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        watchProcess?.stdout?.removeListener('data', readyHandler)
-        debug('Timeout waiting for watcher:', {
-          processState: {
-            killed: watchProcess?.killed,
-            exitCode: watchProcess?.exitCode,
-            pid: watchProcess?.pid
-          },
-          fileState: {
-            exists: existsSync(absolutePath),
-            content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND'
-          }
-        })
+      const startTime = Date.now()
+      const state = {
+        readyReceived: false,
+        changeReceived: false
+      }
+      
+      const debugState = () => ({
+        elapsedMs: Date.now() - startTime,
+        processState: {
+          killed: watchProcess?.killed,
+          exitCode: watchProcess?.exitCode,
+          pid: watchProcess?.pid,
+          env: process.env.NODE_DEBUG,
+          cwd: process.cwd()
+        },
+        fileState: {
+          exists: existsSync(absolutePath),
+          content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND',
+          stats: existsSync(absolutePath) ? statSync(absolutePath) : null
+        },
+        watcherState: state
+      })
+
+      let timeoutId: NodeJS.Timeout
+
+      const cleanup = () => {
+        if (timeoutId) clearTimeout(timeoutId)
+        if (watchProcess?.stdout) watchProcess.stdout.removeListener('data', handleOutput)
         if (fileWatcher) fileWatcher.close()
+      }
+
+      const handleOutput = (data: Buffer) => {
+        const output = data.toString()
+        debug('Received output:', output)
+        
+        if (output.includes('Initial scan complete')) {
+          state.readyReceived = true
+          debug('Ready event received')
+        }
+        
+        if (output.includes('File changed:')) {
+          state.changeReceived = true
+          debug('Change event received')
+        }
+        
+        if (state.readyReceived && state.changeReceived) {
+          debug('All required events received:', debugState())
+          cleanup()
+          resolve()
+        }
+      }
+
+      timeoutId = setTimeout(() => {
+        debug('Timeout waiting for watcher:', debugState())
+        cleanup()
         reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 30000)
+      }, 30000) // Reset to 30s to match CI timeout
+
+      if (watchProcess?.stdout) {
+        watchProcess.stdout.on('data', handleOutput)
+      }
 
       const readyHandler = (data: Buffer) => {
         const output = data.toString()

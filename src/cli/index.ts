@@ -106,7 +106,10 @@ function startNextDev(config: MDXEConfig) {
 }
 
 export function parseArgs(args: string[]): { options: CliOptions; remainingArgs: string[] } {
-  const options: CliOptions = {}
+  const options: CliOptions = {
+    version: false,
+    help: false
+  }
   const remainingArgs: string[] = []
 
   for (let i = 0; i < args.length; i++) {
@@ -203,9 +206,23 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     nextProcess = startNextDev(config)
   }
 
-  if (isDirectory || options.watch) {
-    // Use watch path from options if available, otherwise use filepath
-    const watchTarget = typeof options.watch === 'string' ? options.watch : filepath
+  // Handle watch mode
+  if (options.watch) {
+    const watchPath = typeof options.watch === 'string' ? options.watch : remainingArgs[0]
+    if (!watchPath) {
+      console.error('Watch path is required')
+      process.exit(1)
+    }
+
+    const watchTarget = resolve(process.cwd(), watchPath)
+    log.cli('Watch target:', watchTarget)
+
+    if (!existsSync(watchTarget)) {
+      console.error('Watch target not found:', watchTarget)
+      process.exit(1)
+    }
+
+    const isDirectory = statSync(watchTarget).isDirectory()
     const patterns = isDirectory ? 
       [`${watchTarget}/**/*.mdx`, `${watchTarget}/**/*.md`] : 
       [watchTarget]
@@ -231,21 +248,21 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     const watchOptions = {
       ignored: typeof config.watch === 'object' ? config.watch.ignore : undefined,
       persistent: true,
-      ignoreInitial: false,
+      ignoreInitial: true,
       cwd: process.cwd(),
-      usePolling: true,
+      usePolling: false,
       awaitWriteFinish: {
-        stabilityThreshold: 10,  // Reduce stability threshold for faster detection
-        pollInterval: 5          // More frequent polling
+        stabilityThreshold: 300,  // Wait for writes to finish
+        pollInterval: 100        // Check every 100ms
       },
-      interval: 10,              // Even more aggressive polling
-      binaryInterval: 10,        // More aggressive binary polling
-      alwaysStat: true,         // Get detailed file stats
-      atomic: false,            // Disable atomic writes detection
-      ignorePermissionErrors: true, // Ignore permission issues
-      followSymlinks: false,     // Don't follow symlinks for better performance
-      depth: 0,                  // Only watch immediate files, not subdirectories
-      disableGlobbing: true      // Disable globbing for better performance
+      interval: 100,            // Standard polling interval
+      binaryInterval: 300,      // Standard binary polling
+      alwaysStat: true,        // Get detailed file stats
+      atomic: true,            // Enable atomic writes detection
+      ignorePermissionErrors: true,
+      followSymlinks: true,    // Follow symlinks
+      depth: undefined,        // Watch all subdirectories
+      disableGlobbing: false   // Enable globbing for pattern matching
     }
     
     log.watcher('Initializing watcher with options:', watchOptions)
@@ -253,26 +270,60 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     log.watcher(`Watch options: ${JSON.stringify(watchOptions, null, 2)}`)
     const watcher = watch(absolutePatterns, watchOptions)
     
-    // Ensure watcher is ready before proceeding
-    await new Promise<void>((resolve) => {
-      watcher.on('ready', () => {
+    // Set up debug logging for all watcher events
+    const debugEvent = (event: string, path?: string) => {
+      const msg = `[DEBUG] Watcher event: ${event}${path ? ` - ${path}` : ''}`
+      log.watcher(msg)
+      process.stdout.write(msg + '\n')
+    }
+
+    // Set up all event handlers immediately with debug logging
+    watcher
+      .on('add', path => debugEvent('add', path))
+      .on('change', async (path) => {
+        debugEvent('change', path)
+        try {
+          await processMDXFile(path, config)
+          log.watcher(`Successfully processed: ${path}`)
+          process.stdout.write(`Successfully processed file: ${path}\n`)
+        } catch (error) {
+          log.watcher(`Error processing ${path}:`, error)
+          process.stdout.write(`Error processing file: ${path} - ${error}\n`)
+        }
+      })
+      .on('unlink', path => debugEvent('unlink', path))
+      .on('addDir', path => debugEvent('addDir', path))
+      .on('unlinkDir', path => debugEvent('unlinkDir', path))
+      .on('error', (error) => {
+        debugEvent('error')
+        log.watcher('Watcher error:', error)
+        process.stdout.write(`Watcher error: ${error}\n`)
+      })
+      .on('raw', (event, path, details) => {
+        debugEvent('raw', `${path} - ${event} - ${JSON.stringify(details)}`)
+      })
+
+    // Set up ready handler with enhanced logging
+    const readyPromise = new Promise<void>((resolve) => {
+      watcher.once('ready', () => {
+        debugEvent('ready')
+        log.watcher('Initial scan complete')
+        log.watcher('Watched paths:', JSON.stringify(watcher.getWatched()))
         process.stdout.write('Initial scan complete\n')
+        process.stdout.write(`[DEBUG] Watch base path: ${process.cwd()}\n`)
+        process.stdout.write(`[DEBUG] Watch patterns: ${JSON.stringify(absolutePatterns)}\n\n`)
+        // Ensure all output is written immediately
+        process.stdout.write('\n')
         resolve()
       })
     })
 
+    // Wait for watcher to be ready
+    await readyPromise
     console.log('[DEBUG] Watching for changes...')
-    watcher.on('ready', () => {
-      // Force flush all outputs
-      process.stdout.write('[DEBUG] Initial scan complete\n')
-      process.stdout.write(`[DEBUG] Watched paths: ${JSON.stringify(watcher.getWatched())}\n`)
-      process.stdout.write(`[DEBUG] Watch base path: ${process.cwd()}\n`)
-      process.stdout.write(`[DEBUG] Watch patterns: ${JSON.stringify(absolutePatterns)}\n`)
-      // Ensure all output is written immediately
-      process.stdout.write('\n')
-    })
+
     // Log all watcher events for debugging
-    watcher.on('all', (event, filePath) => {
+    watcher.on('all', (event: string, filePath: string) => {
       log.watcher(`Event: ${event} on file: ${filePath}`)
       try {
         const stats = statSync(filePath)
@@ -321,6 +372,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
         process.stdout.write(`Error processing file: ${errorMsg}\n`)
       }
     })
+
     watcher.on('error', (error: unknown) => {
       const errorMsg = formatError(error)
       console.error('Watcher error:', errorMsg)
@@ -335,7 +387,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       process.exit(0)
     })
   } else {
-    await processMDXFile(filepath, config)
+    await processMDXFile(target, config)
     if (nextProcess) {
       nextProcess.kill()
     }
