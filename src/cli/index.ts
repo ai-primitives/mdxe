@@ -186,15 +186,15 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       cwd: process.cwd(),
       usePolling: true,
       awaitWriteFinish: {
-        stabilityThreshold: 100, // Further reduced for faster detection
-        pollInterval: 25 // More frequent polling
+        stabilityThreshold: 1000, // Increased for more stability
+        pollInterval: 100 // Reduced polling frequency for stability
       },
-      interval: 25, // More frequent polling
-      binaryInterval: 50, // Faster binary file checking
+      interval: 100, // Reduced polling frequency
+      binaryInterval: 300, // Increased to reduce system load
       alwaysStat: true,
       atomic: true,
-      followSymlinks: true, // Follow symlinks to catch all file changes
-      depth: undefined // No limit on subdirectory depth
+      followSymlinks: true,
+      depth: undefined
     }
     
     process.stdout.write(`[DEBUG] Watch options: ${JSON.stringify(watchOptions, null, 2)}\n`)
@@ -202,10 +202,13 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
     console.log('[DEBUG] Watching for changes...')
     watcher.on('ready', () => {
+      // Force flush all outputs
       process.stdout.write('[DEBUG] Initial scan complete\n')
       process.stdout.write(`[DEBUG] Watched paths: ${JSON.stringify(watcher.getWatched())}\n`)
-      // Ensure output is written immediately
-      process.stdout.write('')
+      process.stdout.write(`[DEBUG] Watch base path: ${process.cwd()}\n`)
+      process.stdout.write(`[DEBUG] Watch patterns: ${JSON.stringify(absolutePatterns)}\n`)
+      // Ensure all output is written immediately
+      process.stdout.write('\n')
     })
     // Log all watcher events for debugging
     watcher.on('all', (event, filePath) => {
@@ -249,14 +252,20 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       }
       const absolutePath = resolve(process.cwd(), filePath)
       console.log(`[DEBUG] File ${absolutePath} has been changed`)
-      console.log('[DEBUG] File exists:', existsSync(absolutePath))
-      console.log('[DEBUG] File content:', readFileSync(absolutePath, 'utf-8'))
+      
+      // Ensure we have the latest content
+      const fileContent = readFileSync(absolutePath, 'utf-8')
+      console.log('[DEBUG] Current file content:', fileContent)
+      
       try {
+        process.stdout.write(`[DEBUG] Processing changed file: ${absolutePath}\n`)
         await processMDXFile(absolutePath, config)
-        console.log('[DEBUG] Successfully processed changed file')
+        // Use process.stdout.write for immediate flushing
+        process.stdout.write(`[DEBUG] Successfully processed file: ${absolutePath}\n`)
+        process.stdout.write('Successfully processed\n')
       } catch (error: unknown) {
         const errorMsg = formatError(error)
-        console.error(`[DEBUG] Error processing changed file: ${errorMsg}`)
+        process.stdout.write(`[DEBUG] Error processing changed file: ${errorMsg}\n`)
       }
     })
     watcher.on('error', (error: unknown) => {

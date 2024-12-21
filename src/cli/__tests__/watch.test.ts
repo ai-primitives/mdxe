@@ -147,28 +147,22 @@ module.exports = withMDXE({})
     let stdoutBuffer = ''
     
     stdout.on('data', (data) => {
-      // Append new data to buffer
-      stdoutBuffer += data.toString()
+      const output = data.toString()
+      debug('Raw watch process output:', output)
       
-      // Process complete lines
-      const lines = stdoutBuffer.split('\n')
-      // Keep the last partial line in the buffer
-      stdoutBuffer = lines.pop() || ''
-      
-      for (const line of lines) {
-        if (line.trim()) {
-          debug('Watch process output:', line)
-          // Look for both change and add events since we're deleting and recreating the file
-          if (line.includes('has been changed') || line.includes('has been added')) {
-            debug('Change/Add event detected')
-            hasProcessedFile = true
-          }
-          // Log all debug messages
-          if (line.includes('[DEBUG]')) {
-            debug('Debug message from watcher:', line)
-          }
-        }
+      // Look for specific success indicators with more detailed logging
+      if (output.includes('Successfully processed')) {
+        debug('File processing success detected:', output)
+        debug('Setting hasProcessedFile to true')
+        hasProcessedFile = true
+      } else if (output.includes('Processing changed file')) {
+        debug('File processing started:', output)
+      } else if (output.includes('[DEBUG]')) {
+        debug('Debug output:', output.trim())
       }
+      
+      // Log all output for debugging
+      debug('Processing output:', { raw: output, hasProcessedFile })
     })
 
     if (!watchProcess.stderr) {
@@ -182,89 +176,110 @@ module.exports = withMDXE({})
     // Wait for watcher to be ready
     debug('Waiting for watcher to be ready...')
     
-    // Wait for the "Initial scan complete" message before proceeding
-    await new Promise<void>((resolve) => {
+    // Wait for both initial scan and watched paths to be reported
+    await new Promise<void>((resolve, reject) => {
+      let hasInitialScan = false
+      let hasWatchedPaths = false
+      let timeoutId: NodeJS.Timeout
+
       const readyHandler = (data: Buffer) => {
         const output = data.toString()
+        debug('Ready check output:', output)
+
         if (output.includes('Initial scan complete')) {
-          debug('Watcher is ready')
+          debug('Initial scan completed')
+          hasInitialScan = true
+        }
+        if (output.includes('Watched paths:')) {
+          debug('Watched paths reported')
+          hasWatchedPaths = true
+        }
+
+        if (hasInitialScan && hasWatchedPaths) {
+          debug('Watcher is fully ready')
           watchProcess?.stdout?.removeListener('data', readyHandler)
+          clearTimeout(timeoutId)
           resolve()
         }
       }
+
+      timeoutId = setTimeout(() => {
+        watchProcess?.stdout?.removeListener('data', readyHandler)
+        reject(new Error('Timeout waiting for watcher to be ready'))
+      }, 30000)
+
       watchProcess?.stdout?.on('data', readyHandler)
     })
+    
+    // Additional wait to ensure stability
+    await sleep(2000)
+    debug('Ready wait completed')
 
     debug('Modifying test file...')
     try {
-      // Modify file with explicit file descriptor
-      debug('Opening file for modification...')
-      const writefd = openSync(absolutePath, 'w')
-      debug('Writing new content...')
+      // Use a simpler file modification approach
       const timestamp = Date.now()
-      const newContent = `# MAJOR UPDATE ${timestamp}\n${'='.repeat(50)}\nThis is a completely different file with timestamp ${timestamp}\n${'='.repeat(50)}\n`
-      debug('=== File Modification ===')
-      debug('Writing new content:', newContent)
-      writeFileSync(writefd, newContent, 'utf-8')
+      const newContent = `# Modified Content ${timestamp}\nThis is the updated content.\n`
       
-      // Get file stats after modification
-      try {
-        const fileStat = statSync(absolutePath)
-        debug('File stats after modification:', {
-          inode: fileStat.ino,
-          mode: fileStat.mode,
-          size: fileStat.size,
-          blocks: fileStat.blocks,
-          atime: fileStat.atime,
-          mtime: fileStat.mtime,
-          ctime: fileStat.ctime
-        })
-      } catch (error) {
-        debug('Error getting file stats:', error)
-      }
+      // Write the file in a single operation
+      writeFileSync(absolutePath, newContent, { encoding: 'utf-8', flag: 'w' })
       
-      // Verify content was written
+      debug('File modification completed')
+      debug('Modified content:', newContent)
+      
+      // Verify the file was modified
       const actualContent = readFileSync(absolutePath, 'utf-8')
-      debug('Actual file content after write:', actualContent)
       if (actualContent !== newContent) {
-        debug('WARNING: File content mismatch!')
+        debug('WARNING: File content verification failed')
         debug('Expected:', newContent)
         debug('Actual:', actualContent)
+        throw new Error('File content verification failed')
       }
-      debug('Forcing sync...')
-      const { closeSync } = await import('fs')
-      closeSync(writefd)
       
-      debug('Modification complete')
-      debug('Modified file exists:', existsSync(absolutePath))
-      debug('Modified file content:', readFileSync(absolutePath, 'utf-8'))
+      debug('File modification verified successfully')
     } catch (error) {
       debug('Error modifying file:', error)
       throw error
     }
-    
-    // Wait for changes to be detected
-    await sleep(2000)
-    
-    debug('File modification completed')
-    debug('Current file content:', readFileSync(absolutePath, 'utf-8'))
-    debug('File exists:', existsSync(absolutePath))
-
-    debug('File modification completed, content:', readFileSync(absolutePath, 'utf-8'))
     debug('Waiting for file change detection...')
     // Wait for change event with timeout matching global vitest config
-    const timeout = 120000 // Increased timeout to match global vitest config
+    const timeout = 120000
     const startTime = Date.now()
+    
+    // Enhanced waiting logic with better debug information
+    const checkInterval = 1000 // Check every second
     while (!hasProcessedFile && Date.now() - startTime < timeout) {
-      await sleep(100)
-      debug('Waiting for file change... Time elapsed:', Date.now() - startTime)
+      await sleep(checkInterval)
+      const elapsed = Date.now() - startTime
+      debug('Waiting for file change...', {
+        elapsed,
+        hasProcessedFile,
+        fileExists: existsSync(absolutePath),
+        fileContent: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND',
+        watcherActive: !!watchProcess && !watchProcess.killed
+      })
+      
+      // Check watcher health
+      if (!watchProcess || watchProcess.killed) {
+        debug('Watch process is not active!')
+        break
+      }
     }
+    
     if (!hasProcessedFile) {
-      debug('Timeout waiting for file change event after', timeout, 'ms')
-      debug('Watch process output history:', watchProcess?.stdout?.read()?.toString())
-      debug('Final file state:', {
-        exists: existsSync(absolutePath),
-        content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND'
+      debug('Timeout or failure occurred:', {
+        elapsed: Date.now() - startTime,
+        timeout,
+        watcherActive: !!watchProcess && !watchProcess.killed,
+        fileState: {
+          exists: existsSync(absolutePath),
+          content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND'
+        },
+        processState: {
+          killed: watchProcess?.killed,
+          exitCode: watchProcess?.exitCode,
+          pid: watchProcess?.pid
+        }
       })
     }
     expect(hasProcessedFile).toBe(true)
