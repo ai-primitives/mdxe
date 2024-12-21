@@ -44,15 +44,11 @@ export const metadata = {
   title: 'Styled Test Page'
 }
 
-export default function Page() {
-  return (
-    <div>
-      <h1>Welcome to Styled MDX</h1>
-      <p>This page demonstrates style customization and component imports.</p>
-      <CustomButton>Click me!</CustomButton>
-    </div>
-  )
-}
+# Welcome to Styled MDX
+
+This page demonstrates style customization and component imports.
+
+<CustomButton>Click me!</CustomButton>
 `
 
   beforeAll(() => {
@@ -124,8 +120,8 @@ export default function Page() {
         import { withMDXE } from '${process.cwd()}/dist/index.js'
 
         const withMDX = createMDXPlugin({
-          extension: /\.mdx?$/,
           options: {
+            jsx: true,
             remarkPlugins: [],
             rehypePlugins: [],
             providerImportSource: '@mdx-js/react'

@@ -40,14 +40,9 @@ export const metadata = {
   title: 'Production Test'
 }
 
-export default function Page() {
-  return (
-    <div>
-      <h1>Production Server Test</h1>
-      <p>This page tests the production server functionality.</p>
-    </div>
-  )
-}
+# Production Server Test
+
+This page tests the production server functionality.
     `
     fs.writeFileSync(path.join(testDir, 'app', 'page.mdx'), mdxContent)
 
@@ -68,7 +63,14 @@ export default function Page() {
 
       module.exports = async () => {
         const plugin = await withMDXE()
-        const withMDX = (await import('@next/mdx')).default()
+        const withMDX = (await import('@next/mdx')).default({
+          options: {
+            jsx: true,
+            remarkPlugins: [],
+            rehypePlugins: [],
+            providerImportSource: '@mdx-js/react'
+          }
+        })
         return withMDX(plugin(config))
       }
     `
