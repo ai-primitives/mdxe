@@ -94,11 +94,11 @@ function startNextDev(config: MDXEConfig) {
   return nextProcess
 }
 
-export function parseArgs(args: string[]): CliOptions {
+export function parseArgs(args: string[]): { options: CliOptions; remainingArgs: string[] } {
   const options: CliOptions = {}
-  let i = 0
+  const remainingArgs: string[] = []
 
-  while (i < args.length) {
+  for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     if (arg === '-v' || arg === '--version') {
       options.version = true
@@ -106,14 +106,12 @@ export function parseArgs(args: string[]): CliOptions {
       options.help = true
     } else if (arg === '--watch') {
       options.watch = { enabled: true }
-      // Skip the --watch flag but keep the target path in args
-      args.splice(i, 1)
-      continue
+    } else {
+      remainingArgs.push(arg)
     }
-    i++
   }
 
-  return options
+  return { options, remainingArgs }
 }
 
 export function showHelp(): void {
@@ -135,7 +133,7 @@ export function showVersion(): void {
 }
 
 export async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
-  const options = parseArgs(args)
+  const { options, remainingArgs } = parseArgs(args)
   const config = await loadConfig()
 
   if (options.version) {
@@ -148,8 +146,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     return
   }
 
-  // Get the target path after handling flags
-  const target = args[0]
+  // Get the target path from remaining args
+  const target = remainingArgs[0]
   if (!target) {
     showHelp() // Show help instead of error
     return
@@ -188,11 +186,11 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       cwd: process.cwd(),
       usePolling: true,
       awaitWriteFinish: {
-        stabilityThreshold: 200, // Reduced for faster detection
-        pollInterval: 50
+        stabilityThreshold: 100, // Further reduced for faster detection
+        pollInterval: 25 // More frequent polling
       },
-      interval: 50, // More frequent polling
-      binaryInterval: 100, // Faster binary file checking
+      interval: 25, // More frequent polling
+      binaryInterval: 50, // Faster binary file checking
       alwaysStat: true,
       atomic: true,
       followSymlinks: true, // Follow symlinks to catch all file changes
