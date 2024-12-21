@@ -1,16 +1,21 @@
 import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, openSync, readFileSync, existsSync, statSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, openSync, readFileSync, existsSync, statSync, fsyncSync, closeSync, watch, FSWatcher } from 'fs'
 import fetch from 'node-fetch'
 import { sleep, debug } from '../../test/setup.js'
+
+const log = {
+  test: (msg: string, ...args: any[]) => debug(`[TEST] ${msg}`, ...args),
+  fs: (msg: string, ...args: any[]) => debug(`[FS] ${msg}`, ...args),
+  proc: (msg: string, ...args: any[]) => debug(`[PROC] ${msg}`, ...args)
+}
 
 describe('Watch Mode', () => {
   const testDir = join(process.cwd(), 'test-watch-mode')
   const singleFile = join(testDir, 'test.mdx')
   const multiDir = join(testDir, 'content')
   let watchProcess: ReturnType<typeof spawn> | null = null
-
   beforeEach(() => {
     mkdirSync(testDir, { recursive: true })
     mkdirSync(multiDir, { recursive: true })
@@ -69,6 +74,7 @@ module.exports = withMDXE({})
 
   it('should detect changes in single file mode', async () => {
     let hasProcessedFile = false
+    let fileWatcher: FSWatcher | null = null
     const absolutePath = resolve(process.cwd(), singleFile)
     const args = ['--watch', absolutePath]
 
@@ -77,95 +83,64 @@ module.exports = withMDXE({})
     debug('Absolute file path:', absolutePath)
     debug('Current working directory:', process.cwd())
     
-    // Get initial filesystem state
+    // Create initial file with synchronous operations
     try {
-      const dirStat = statSync(testDir)
-      debug('Test directory stats:', {
-        inode: dirStat.ino,
-        mode: dirStat.mode,
-        uid: dirStat.uid,
-        gid: dirStat.gid,
-        size: dirStat.size,
-        blocks: dirStat.blocks,
-        atime: dirStat.atime,
-        mtime: dirStat.mtime,
-        ctime: dirStat.ctime
-      })
-    } catch (error) {
-      debug('Error getting directory stats:', error)
-    }
-    
-    // Create initial file with explicit file descriptor
-    try {
-      const fd = openSync(absolutePath, 'w')
-      writeFileSync(fd, `# Initial Test\nThis is a test file.\n`, 'utf-8')
-      // Force sync to ensure changes are written to disk
-      const { closeSync } = await import('fs')
-      closeSync(fd)
+      writeFileSync(absolutePath, `# Initial Test\nThis is a test file.\n`, 'utf-8')
       debug('Initial file created successfully')
       debug('Initial file exists:', existsSync(absolutePath))
       debug('Initial file content:', readFileSync(absolutePath, 'utf-8'))
-      debug('File descriptor:', fd)
     } catch (error) {
       debug('Error creating initial file:', error)
       throw error
     }
 
-    // Ensure file exists and is ready before starting watch
-    await sleep(5000) // Increased wait time for more reliable initialization
+    // Set up a file watcher to monitor changes independently
+    fileWatcher = watch(absolutePath)
+    fileWatcher.on('change', (eventType, filename) => {
+      debug('File system event detected:', { eventType, filename })
+    })
+
+    // Ensure file exists before starting watch
+    await sleep(1000)
     debug('Pre-watch file check - exists:', existsSync(absolutePath))
     debug('Pre-watch file content:', readFileSync(absolutePath, 'utf-8'))
 
     debug('Starting watch process with args:', args)
-    debug('Initial file content:', readFileSync(absolutePath, 'utf-8'))
-    // Set up environment variables for debug output
-    const spawnEnv = {
-      ...process.env,
-      DEBUG: '*',
-      FORCE_COLOR: '0', // Disable colors for cleaner output
-      NODE_ENV: 'test'
-    }
-
-    debug('Spawning watch process with env:', spawnEnv)
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      detached: false, // Changed to false for better process management
+      detached: false,
       cwd: process.cwd(),
-      env: spawnEnv as NodeJS.ProcessEnv,
+      env: {
+        ...process.env,
+        DEBUG: '*',
+        FORCE_COLOR: '0',
+        NODE_ENV: 'test',
+        NODE_DEBUG: 'fs,watch,stream'
+      } as NodeJS.ProcessEnv,
       windowsHide: true
     })
+    log.proc('Started watch process:', { pid: watchProcess.pid })
 
     if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
+      if (fileWatcher) fileWatcher.close()
       throw new Error('Failed to spawn process or get process streams')
     }
 
     // Store stream references to avoid null checks
     const stdout = watchProcess.stdout
-
-    // Buffer to store partial lines
-    let stdoutBuffer = ''
     
     stdout.on('data', (data) => {
       const output = data.toString()
-      debug('Raw watch process output:', output)
-      
-      // Look for specific success indicators with more detailed logging
-      if (output.includes('Successfully processed')) {
-        debug('File processing success detected:', output)
-        debug('Setting hasProcessedFile to true')
+      debug('Watch process output:', output)
+      if (output.includes('has been changed') || output.includes('Successfully processed file:')) {
         hasProcessedFile = true
-      } else if (output.includes('Processing changed file')) {
-        debug('File processing started:', output)
-      } else if (output.includes('[DEBUG]')) {
-        debug('Debug output:', output.trim())
+        debug('File change or process success detected')
       }
-      
-      // Log all output for debugging
-      debug('Processing output:', { raw: output, hasProcessedFile })
     })
 
     if (!watchProcess.stderr) {
+      if (fileWatcher) fileWatcher.close()
       throw new Error('Failed to get stderr from watch process')
     }
 
@@ -176,93 +151,87 @@ module.exports = withMDXE({})
     // Wait for watcher to be ready
     debug('Waiting for watcher to be ready...')
     
-    // Wait for both initial scan and watched paths to be reported
     await new Promise<void>((resolve, reject) => {
-      let hasInitialScan = false
-      let hasWatchedPaths = false
-      let timeoutId: NodeJS.Timeout
+      const timeoutId = setTimeout(() => {
+        watchProcess?.stdout?.removeListener('data', readyHandler)
+        debug('Timeout waiting for watcher:', {
+          processState: {
+            killed: watchProcess?.killed,
+            exitCode: watchProcess?.exitCode,
+            pid: watchProcess?.pid
+          },
+          fileState: {
+            exists: existsSync(absolutePath),
+            content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND'
+          }
+        })
+        if (fileWatcher) fileWatcher.close()
+        reject(new Error('Timeout waiting for watcher to be ready'))
+      }, 30000)
 
       const readyHandler = (data: Buffer) => {
         const output = data.toString()
-        debug('Ready check output:', output)
-
         if (output.includes('Initial scan complete')) {
-          debug('Initial scan completed')
-          hasInitialScan = true
-        }
-        if (output.includes('Watched paths:')) {
-          debug('Watched paths reported')
-          hasWatchedPaths = true
-        }
-
-        if (hasInitialScan && hasWatchedPaths) {
-          debug('Watcher is fully ready')
           watchProcess?.stdout?.removeListener('data', readyHandler)
           clearTimeout(timeoutId)
+          debug('Watcher ready event received')
           resolve()
         }
       }
 
-      timeoutId = setTimeout(() => {
-        watchProcess?.stdout?.removeListener('data', readyHandler)
-        reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 30000)
-
       watchProcess?.stdout?.on('data', readyHandler)
     })
     
-    // Additional wait to ensure stability
-    await sleep(2000)
-    debug('Ready wait completed')
+    await sleep(1000)
 
     debug('Modifying test file...')
     try {
-      // Use a simpler file modification approach
       const timestamp = Date.now()
       const newContent = `# Modified Content ${timestamp}\nThis is the updated content.\n`
       
-      // Write the file in a single operation
+      // Write content with atomic operation
       writeFileSync(absolutePath, newContent, { encoding: 'utf-8', flag: 'w' })
+      debug('Content written to file')
       
-      debug('File modification completed')
-      debug('Modified content:', newContent)
+      // Verify content
+      const verifyContent = readFileSync(absolutePath, 'utf-8')
+      debug('Verification read completed')
       
-      // Verify the file was modified
-      const actualContent = readFileSync(absolutePath, 'utf-8')
-      if (actualContent !== newContent) {
-        debug('WARNING: File content verification failed')
+      
+      if (verifyContent !== newContent) {
+        debug('File content verification failed')
         debug('Expected:', newContent)
-        debug('Actual:', actualContent)
+        debug('Actual:', verifyContent)
         throw new Error('File content verification failed')
       }
       
-      debug('File modification verified successfully')
+      debug('File modification completed and verified')
+      debug('Modified content:', newContent)
+      debug('File stats:', statSync(absolutePath))
     } catch (error) {
       debug('Error modifying file:', error)
+      if (fileWatcher) fileWatcher.close()
       throw error
     }
+
     debug('Waiting for file change detection...')
     // Wait for change event with timeout matching global vitest config
     const timeout = 120000
     const startTime = Date.now()
     
-    // Enhanced waiting logic with better debug information
-    const checkInterval = 1000 // Check every second
+    // Enhanced waiting logic with file system event verification
     while (!hasProcessedFile && Date.now() - startTime < timeout) {
-      await sleep(checkInterval)
-      const elapsed = Date.now() - startTime
-      debug('Waiting for file change...', {
-        elapsed,
-        hasProcessedFile,
-        fileExists: existsSync(absolutePath),
-        fileContent: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND',
-        watcherActive: !!watchProcess && !watchProcess.killed
-      })
-      
-      // Check watcher health
+      await sleep(100)
       if (!watchProcess || watchProcess.killed) {
-        debug('Watch process is not active!')
+        debug('Watch process terminated unexpectedly')
         break
+      }
+      // Verify file content periodically
+      try {
+        const currentContent = readFileSync(absolutePath, 'utf-8')
+        debug('Current file content:', currentContent)
+      } catch (error) {
+        debug('Error reading file during wait:', error)
       }
     }
     
@@ -282,22 +251,48 @@ module.exports = withMDXE({})
         }
       })
     }
+
+    // Clean up file watcher
+    if (fileWatcher) {
+      fileWatcher.close()
+    }
+
     expect(hasProcessedFile).toBe(true)
   })
 
   it('should detect changes in directory mode', async () => {
     let hasProcessedFiles = false
+    let dirWatcher: FSWatcher | null = null
     const args = ['--watch', multiDir]
+
+    debug('=== Directory Mode Test Setup ===')
+    debug('Test directory path:', multiDir)
+    debug('Current working directory:', process.cwd())
+
+    // Set up directory watcher
+    dirWatcher = watch(multiDir, { recursive: true })
+    dirWatcher.on('change', (eventType, filename) => {
+      debug('Directory watcher event:', { eventType, filename })
+    })
 
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: false,
-      env: process.env as NodeJS.ProcessEnv,
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DEBUG: '*',
+        FORCE_COLOR: '0',
+        NODE_ENV: 'test',
+        NODE_DEBUG: 'fs,watch,stream'
+      } as NodeJS.ProcessEnv,
       windowsHide: true
     })
+    log.proc('Started watch process:', { pid: watchProcess.pid })
 
     if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
+      if (dirWatcher) dirWatcher.close()
       throw new Error('Failed to spawn process or get process streams')
     }
 
@@ -307,12 +302,14 @@ module.exports = withMDXE({})
     stdout.on('data', (data) => {
       const output = data.toString()
       debug('Watch process output:', output)
-      if (output.includes('has been changed') || output.includes('has been added')) {
+      if (output.includes('has been changed') || output.includes('Successfully processed file:')) {
         hasProcessedFiles = true
+        debug('File change or process success detected')
       }
     })
 
     if (!watchProcess.stderr) {
+      if (dirWatcher) dirWatcher.close()
       throw new Error('Failed to get stderr from watch process')
     }
 
@@ -323,56 +320,129 @@ module.exports = withMDXE({})
     debug('Waiting for initial processing...')
     
     // Wait for the "Initial scan complete" message before proceeding
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        watchProcess?.stdout?.removeListener('data', readyHandler)
+        debug('Timeout waiting for watcher:', {
+          processState: {
+            killed: watchProcess?.killed,
+            exitCode: watchProcess?.exitCode,
+            pid: watchProcess?.pid
+          },
+          directoryState: {
+            exists: existsSync(multiDir),
+            files: existsSync(multiDir) ? 
+              readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'DIR_NOT_FOUND'
+          }
+        })
+        if (dirWatcher) dirWatcher.close()
+        reject(new Error('Timeout waiting for watcher to be ready'))
+      }, 30000)
+
       const readyHandler = (data: Buffer) => {
         const output = data.toString()
         if (output.includes('Initial scan complete')) {
-          debug('Watcher is ready')
           watchProcess?.stdout?.removeListener('data', readyHandler)
+          clearTimeout(timeoutId)
+          debug('Watcher ready event received')
           resolve()
         }
       }
+
       watchProcess?.stdout?.on('data', readyHandler)
     })
 
+    await sleep(1000)
+
     debug('Modifying page1.mdx...')
-    writeFileSync(
-      join(multiDir, 'page1.mdx'),
-      `
-# Updated Page 1
-This is an updated test file.
-    `,
-    )
+    try {
+      const timestamp = Date.now()
+      const page1Content = `# Modified Page 1 ${timestamp}\nThis is an updated test file.\n`
+      
+      // Write content with atomic operation
+      writeFileSync(join(multiDir, 'page1.mdx'), page1Content, { encoding: 'utf-8', flag: 'w' })
+      debug('Content written to page1.mdx')
+      
+      debug('Adding page3.mdx...')
+      const page3Content = `# Page 3 ${timestamp}\nThis is a new test file.\n`
+      writeFileSync(join(multiDir, 'page3.mdx'), page3Content, { encoding: 'utf-8', flag: 'w' })
+      debug('Content written to page3.mdx')
+      
+      // Verify content
+      const verifyPage1 = readFileSync(join(multiDir, 'page1.mdx'), 'utf-8')
+      const verifyPage3 = readFileSync(join(multiDir, 'page3.mdx'), 'utf-8')
+      
+      if (verifyPage1 !== page1Content || verifyPage3 !== page3Content) {
+        debug('File content verification failed')
+        debug('Expected page1:', page1Content)
+        debug('Actual page1:', verifyPage1)
+        debug('Expected page3:', page3Content)
+        debug('Actual page3:', verifyPage3)
+        throw new Error('File content verification failed')
+      }
+      
+      debug('File modifications completed and verified')
+      debug('Directory contents:', {
+        page1: verifyPage1,
+        page3: verifyPage3
+      })
+    } catch (error) {
+      debug('Error modifying files:', error)
+      if (dirWatcher) dirWatcher.close()
+      throw error
+    }
 
-    debug('Adding page3.mdx...')
-    writeFileSync(
-      join(multiDir, 'page3.mdx'),
-      `
-# Page 3
-This is a new test file.
-    `,
-    )
-
-    debug('File modifications completed')
-    debug('page1.mdx content:', readFileSync(join(multiDir, 'page1.mdx'), 'utf-8'))
-    debug('page3.mdx content:', readFileSync(join(multiDir, 'page3.mdx'), 'utf-8'))
     debug('Waiting for file change detection...')
     // Wait for change event with timeout matching global vitest config
-    const timeout = 120000 // Increased timeout to match global vitest config
+    const timeout = 120000
     const startTime = Date.now()
+    
+    // Enhanced waiting logic with file system event verification
     while (!hasProcessedFiles && Date.now() - startTime < timeout) {
       await sleep(100)
-      debug('Waiting for directory changes... Time elapsed:', Date.now() - startTime)
+      if (!watchProcess || watchProcess.killed) {
+        debug('Watch process terminated unexpectedly')
+        break
+      }
+      // Verify directory contents periodically
+      try {
+        const currentState = {
+          page1: existsSync(join(multiDir, 'page1.mdx')) ? readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
+          page2: existsSync(join(multiDir, 'page2.mdx')) ? readFileSync(join(multiDir, 'page2.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
+          page3: existsSync(join(multiDir, 'page3.mdx')) ? readFileSync(join(multiDir, 'page3.mdx'), 'utf-8') : 'FILE_NOT_FOUND'
+        }
+        debug('Current directory state:', currentState)
+      } catch (error) {
+        debug('Error reading directory during wait:', error)
+      }
     }
+    
     if (!hasProcessedFiles) {
-      debug('Timeout waiting for file change events after', timeout, 'ms')
-      debug('Watch process output history:', watchProcess?.stdout?.read()?.toString())
-      debug('Final directory state:', {
-        page1: existsSync(join(multiDir, 'page1.mdx')) ? readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
-        page2: existsSync(join(multiDir, 'page2.mdx')) ? readFileSync(join(multiDir, 'page2.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
-        page3: existsSync(join(multiDir, 'page3.mdx')) ? readFileSync(join(multiDir, 'page3.mdx'), 'utf-8') : 'FILE_NOT_FOUND'
+      debug('Timeout or failure occurred:', {
+        elapsed: Date.now() - startTime,
+        timeout,
+        watcherActive: !!watchProcess && !watchProcess.killed,
+        directoryState: {
+          exists: existsSync(multiDir),
+          files: {
+            page1: existsSync(join(multiDir, 'page1.mdx')) ? readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
+            page2: existsSync(join(multiDir, 'page2.mdx')) ? readFileSync(join(multiDir, 'page2.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
+            page3: existsSync(join(multiDir, 'page3.mdx')) ? readFileSync(join(multiDir, 'page3.mdx'), 'utf-8') : 'FILE_NOT_FOUND'
+          }
+        },
+        processState: {
+          killed: watchProcess?.killed,
+          exitCode: watchProcess?.exitCode,
+          pid: watchProcess?.pid
+        }
       })
     }
+
+    // Clean up directory watcher
+    if (dirWatcher) {
+      dirWatcher.close()
+    }
+
     expect(hasProcessedFiles).toBe(true)
   })
 

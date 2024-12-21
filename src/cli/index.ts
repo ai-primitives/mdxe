@@ -6,6 +6,17 @@ import { cosmiconfig } from 'cosmiconfig'
 import { spawn, type ChildProcess } from 'child_process'
 import type { MDXEConfig } from './config.js'
 
+// Use console.debug for logging
+function createLogger(prefix: string) {
+  return (msg: string, ...args: any[]) => console.debug(`[${prefix}] ${msg}`, ...args)
+}
+
+const log = {
+  watcher: createLogger('WATCHER'),
+  fs: createLogger('FS'),
+  cli: createLogger('CLI')
+}
+
 // Import package.json with type assertion for ESM compatibility
 const pkg = {
   default: {
@@ -100,16 +111,38 @@ export function parseArgs(args: string[]): { options: CliOptions; remainingArgs:
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
-    if (arg === '-v' || arg === '--version') {
-      options.version = true
-    } else if (arg === '-h' || arg === '--help') {
-      options.help = true
-    } else if (arg === '--watch') {
-      options.watch = { enabled: true }
+    const nextArg = args[i + 1]
+
+    if (arg.startsWith('-')) {
+      switch (arg) {
+        case '-v':
+        case '--version':
+          options.version = true
+          break
+        case '-h':
+        case '--help':
+          options.help = true
+          break
+        case '-w':
+        case '--watch':
+          // If next arg exists and isn't a flag, it's the watch path
+          if (nextArg && !nextArg.startsWith('-')) {
+            options.watch = nextArg
+            i++ // Skip next arg since we used it
+          } else {
+            options.watch = true
+          }
+          break
+        default:
+          console.warn(`Unknown option: ${arg}`)
+      }
     } else {
       remainingArgs.push(arg)
     }
   }
+
+  log.cli('Parsed options:', JSON.stringify(options, null, 2))
+  log.cli('Remaining args:', remainingArgs)
 
   return { options, remainingArgs }
 }
@@ -170,35 +203,63 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     nextProcess = startNextDev(config)
   }
 
-  if (isDirectory || config.watch?.enabled) {
-    const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
-    const absolutePatterns = patterns.map((p) => resolve(process.cwd(), p))
+  if (isDirectory || options.watch) {
+    // Use watch path from options if available, otherwise use filepath
+    const watchTarget = typeof options.watch === 'string' ? options.watch : filepath
+    const patterns = isDirectory ? 
+      [`${watchTarget}/**/*.mdx`, `${watchTarget}/**/*.md`] : 
+      [watchTarget]
+    
+    // Resolve absolute paths and validate
+    const absolutePatterns = patterns.map((p) => {
+      const resolved = resolve(process.cwd(), p)
+      log.watcher(`Resolved pattern ${p} to ${resolved}`)
+      return resolved
+    })
 
-    // Use process.stdout.write for immediate flushing
-    process.stdout.write(`[DEBUG] Starting watcher with patterns: ${JSON.stringify(absolutePatterns)}\n`)
-    console.log('[DEBUG] Current working directory:', process.cwd())
-    console.log('[DEBUG] Absolute patterns resolved:', absolutePatterns.map(p => resolve(process.cwd(), p)))
+    // Validate paths before watching
+    absolutePatterns.forEach(pattern => {
+      const baseDir = pattern.includes('*') ? dirname(pattern) : pattern
+      if (!existsSync(baseDir)) {
+        log.watcher(`Warning: Base directory ${baseDir} does not exist`)
+      }
+    })
+
+    log.watcher(`Starting watcher with patterns: ${JSON.stringify(absolutePatterns)}`)
+    log.watcher(`Current working directory: ${process.cwd()}`)
     
     const watchOptions = {
-      ignored: config.watch?.ignore,
+      ignored: typeof config.watch === 'object' ? config.watch.ignore : undefined,
       persistent: true,
       ignoreInitial: false,
       cwd: process.cwd(),
       usePolling: true,
       awaitWriteFinish: {
-        stabilityThreshold: 1000, // Increased for more stability
-        pollInterval: 100 // Reduced polling frequency for stability
+        stabilityThreshold: 10,  // Reduce stability threshold for faster detection
+        pollInterval: 5          // More frequent polling
       },
-      interval: 100, // Reduced polling frequency
-      binaryInterval: 300, // Increased to reduce system load
-      alwaysStat: true,
-      atomic: true,
-      followSymlinks: true,
-      depth: undefined
+      interval: 10,              // Even more aggressive polling
+      binaryInterval: 10,        // More aggressive binary polling
+      alwaysStat: true,         // Get detailed file stats
+      atomic: false,            // Disable atomic writes detection
+      ignorePermissionErrors: true, // Ignore permission issues
+      followSymlinks: false,     // Don't follow symlinks for better performance
+      depth: 0,                  // Only watch immediate files, not subdirectories
+      disableGlobbing: true      // Disable globbing for better performance
     }
     
-    process.stdout.write(`[DEBUG] Watch options: ${JSON.stringify(watchOptions, null, 2)}\n`)
+    log.watcher('Initializing watcher with options:', watchOptions)
+    
+    log.watcher(`Watch options: ${JSON.stringify(watchOptions, null, 2)}`)
     const watcher = watch(absolutePatterns, watchOptions)
+    
+    // Ensure watcher is ready before proceeding
+    await new Promise<void>((resolve) => {
+      watcher.on('ready', () => {
+        process.stdout.write('Initial scan complete\n')
+        resolve()
+      })
+    })
 
     console.log('[DEBUG] Watching for changes...')
     watcher.on('ready', () => {
@@ -212,60 +273,52 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     })
     // Log all watcher events for debugging
     watcher.on('all', (event, filePath) => {
-      console.log(`[DEBUG] Watcher event: ${event} on file: ${filePath}`)
+      log.watcher(`Event: ${event} on file: ${filePath}`)
       try {
         const stats = statSync(filePath)
-        console.log(`[DEBUG] File stats for ${event}:`, {
+        log.fs(`File stats for ${event}:`, {
           exists: existsSync(filePath),
           inode: stats.ino,
           size: stats.size,
           mtime: stats.mtime,
-          ctime: stats.ctime
+          ctime: stats.ctime,
+          mode: stats.mode,
+          uid: stats.uid,
+          gid: stats.gid
         })
       } catch (error) {
-        console.log(`[DEBUG] Error getting stats for ${filePath}:`, error)
+        log.fs(`Error getting stats for ${filePath}:`, error)
       }
     })
 
     watcher.on('add', async (filePath: string | Error) => {
       if (filePath instanceof Error) {
-        console.error('[DEBUG] Error in add handler:', filePath.message)
+        console.error('Error in add handler:', filePath.message)
         return
       }
       const absolutePath = resolve(process.cwd(), filePath)
-      console.log(`[DEBUG] File ${absolutePath} has been added`)
-      console.log('[DEBUG] File exists:', existsSync(absolutePath))
-      console.log('[DEBUG] File content:', readFileSync(absolutePath, 'utf-8'))
       try {
         await processMDXFile(absolutePath, config)
-        console.log('[DEBUG] Successfully processed added file')
+        console.log('Successfully processed file:', absolutePath)
       } catch (error: unknown) {
         const errorMsg = formatError(error)
-        console.error(`[DEBUG] Error processing added file: ${errorMsg}`)
+        console.error('Error processing file:', errorMsg)
       }
     })
 
     watcher.on('change', async (filePath: string | Error) => {
       if (filePath instanceof Error) {
-        console.error('[DEBUG] Error in change handler:', filePath.message)
+        process.stdout.write(`Error in change handler: ${filePath.message}\n`)
         return
       }
       const absolutePath = resolve(process.cwd(), filePath)
-      console.log(`[DEBUG] File ${absolutePath} has been changed`)
-      
-      // Ensure we have the latest content
-      const fileContent = readFileSync(absolutePath, 'utf-8')
-      console.log('[DEBUG] Current file content:', fileContent)
-      
+      process.stdout.write(`File ${absolutePath} has been changed\n`)
       try {
-        process.stdout.write(`[DEBUG] Processing changed file: ${absolutePath}\n`)
         await processMDXFile(absolutePath, config)
-        // Use process.stdout.write for immediate flushing
-        process.stdout.write(`[DEBUG] Successfully processed file: ${absolutePath}\n`)
-        process.stdout.write('Successfully processed\n')
+        process.stdout.write(`Successfully processed file: ${absolutePath}\n`)
       } catch (error: unknown) {
         const errorMsg = formatError(error)
-        process.stdout.write(`[DEBUG] Error processing changed file: ${errorMsg}\n`)
+        process.stdout.write(`Error processing file: ${errorMsg}\n`)
       }
     })
     watcher.on('error', (error: unknown) => {
