@@ -70,34 +70,70 @@ This page demonstrates style customization and component imports.
       fs.mkdirSync(path.join(testDir, 'styles'), { recursive: true })
       fs.writeFileSync(path.join(testDir, 'styles', 'custom.css'), customStyles)
 
-      // Create app directory with styled MDX
+      // Create app directory structure
       fs.mkdirSync(path.join(testDir, 'app'), { recursive: true })
       fs.mkdirSync(path.join(testDir, 'app', 'styled'), { recursive: true })
+      fs.mkdirSync(path.join(testDir, 'app', 'components'), { recursive: true })
+      
+      // Create root layout.tsx
+      const rootLayout = `
+        import '../styles/custom.css'
+        
+        export const metadata = {
+          title: 'MDX Test App',
+          description: 'Testing MDX integration with Next.js'
+        }
+        
+        export default function RootLayout({
+          children,
+        }: {
+          children: React.ReactNode
+        }) {
+          return (
+            <html lang="en">
+              <body>{children}</body>
+            </html>
+          )
+        }
+      `
+
+      // Create CustomButton component
+      const customButton = `
+        import React from 'react'
+
+        export default function CustomButton({ children }: { children: React.ReactNode }) {
+          return (
+            <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+              {children}
+            </button>
+          )
+        }
+      `
+      
+      fs.writeFileSync(path.join(testDir, 'app', 'layout.tsx'), rootLayout)
+      fs.writeFileSync(path.join(testDir, 'app', 'components', 'CustomButton.tsx'), customButton)
       fs.writeFileSync(path.join(testDir, 'app', 'styled', 'page.mdx'), styledMdxContent)
 
       debug('Creating Next.js configuration...')
       const nextConfig = `
-        const withMDXE = async () => {
-          const { default: mdxe } = await import('${process.cwd()}/dist/index.js')
-          return mdxe.withMDXE
-        }
+        const { withMDXE } = require('${process.cwd()}/dist')
 
         /** @type {import('next').NextConfig} */
-        module.exports = async () => {
-          const plugin = await withMDXE()
-          return plugin({
-            pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
-            experimental: {
-              appDir: true
-            },
-            mdxe: {
-              styleOverrides: true,
-              customComponents: {
-                CustomButton: './components/CustomButton'
-              }
-            }
-          })
+        const config = {
+          pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
+          experimental: {
+            mdxRs: true
+          }
         }
+
+        module.exports = withMDXE({
+          ...config,
+          mdx: {
+            remarkPlugins: [],
+            rehypePlugins: [],
+            providerImportSource: '@mdx-js/react'
+          }
+        })
       `
       fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 

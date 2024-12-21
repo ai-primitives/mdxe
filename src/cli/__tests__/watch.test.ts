@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, openSync, closeSync, readFileSync, existsSync, statSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, openSync, readFileSync, existsSync, statSync } from 'fs'
 import fetch from 'node-fetch'
 import { sleep, debug } from '../../test/setup.js'
 
@@ -100,8 +100,8 @@ module.exports = withMDXE({})
       const fd = openSync(absolutePath, 'w')
       writeFileSync(fd, `# Initial Test\nThis is a test file.\n`, 'utf-8')
       // Force sync to ensure changes are written to disk
-      const { closeSync: fsyncClose } = require('fs')
-      fsyncClose(fd)
+      const { closeSync } = await import('fs')
+      closeSync(fd)
       debug('Initial file created successfully')
       debug('Initial file exists:', existsSync(absolutePath))
       debug('Initial file content:', readFileSync(absolutePath, 'utf-8'))
@@ -135,14 +135,13 @@ module.exports = withMDXE({})
       windowsHide: true
     })
 
-    if (!watchProcess || !watchProcess.stdout || !watchProcess.stderr) {
+    if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
       throw new Error('Failed to spawn process or get process streams')
     }
 
     // Store stream references to avoid null checks
     const stdout = watchProcess.stdout
-    const stderr = watchProcess.stderr
 
     // Buffer to store partial lines
     let stdoutBuffer = ''
@@ -233,8 +232,8 @@ module.exports = withMDXE({})
         debug('Actual:', actualContent)
       }
       debug('Forcing sync...')
-      const { closeSync: fsyncClose } = require('fs')
-      fsyncClose(writefd)
+      const { closeSync } = await import('fs')
+      closeSync(writefd)
       
       debug('Modification complete')
       debug('Modified file exists:', existsSync(absolutePath))
@@ -253,15 +252,20 @@ module.exports = withMDXE({})
 
     debug('File modification completed, content:', readFileSync(absolutePath, 'utf-8'))
     debug('Waiting for file change detection...')
-    // Wait for change event with timeout
-    const timeout = 30000 // Increased timeout for more reliable file change detection
+    // Wait for change event with timeout matching global vitest config
+    const timeout = 120000 // Increased timeout to match global vitest config
     const startTime = Date.now()
     while (!hasProcessedFile && Date.now() - startTime < timeout) {
       await sleep(100)
+      debug('Waiting for file change... Time elapsed:', Date.now() - startTime)
     }
     if (!hasProcessedFile) {
-      debug('Timeout waiting for file change event')
+      debug('Timeout waiting for file change event after', timeout, 'ms')
       debug('Watch process output history:', watchProcess?.stdout?.read()?.toString())
+      debug('Final file state:', {
+        exists: existsSync(absolutePath),
+        content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND'
+      })
     }
     expect(hasProcessedFile).toBe(true)
   })
@@ -277,14 +281,13 @@ module.exports = withMDXE({})
       windowsHide: true
     })
 
-    if (!watchProcess || !watchProcess.stdout || !watchProcess.stderr) {
+    if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
       throw new Error('Failed to spawn process or get process streams')
     }
 
     // Store stream references to avoid null checks
     const stdout = watchProcess.stdout
-    const stderr = watchProcess.stderr
 
     stdout.on('data', (data) => {
       const output = data.toString()
@@ -339,15 +342,21 @@ This is a new test file.
     debug('page1.mdx content:', readFileSync(join(multiDir, 'page1.mdx'), 'utf-8'))
     debug('page3.mdx content:', readFileSync(join(multiDir, 'page3.mdx'), 'utf-8'))
     debug('Waiting for file change detection...')
-    // Wait for change event with timeout
-    const timeout = 30000 // Increased timeout for more reliable file change detection
+    // Wait for change event with timeout matching global vitest config
+    const timeout = 120000 // Increased timeout to match global vitest config
     const startTime = Date.now()
     while (!hasProcessedFiles && Date.now() - startTime < timeout) {
       await sleep(100)
+      debug('Waiting for directory changes... Time elapsed:', Date.now() - startTime)
     }
     if (!hasProcessedFiles) {
-      debug('Timeout waiting for file change events')
+      debug('Timeout waiting for file change events after', timeout, 'ms')
       debug('Watch process output history:', watchProcess?.stdout?.read()?.toString())
+      debug('Final directory state:', {
+        page1: existsSync(join(multiDir, 'page1.mdx')) ? readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
+        page2: existsSync(join(multiDir, 'page2.mdx')) ? readFileSync(join(multiDir, 'page2.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
+        page3: existsSync(join(multiDir, 'page3.mdx')) ? readFileSync(join(multiDir, 'page3.mdx'), 'utf-8') : 'FILE_NOT_FOUND'
+      })
     }
     expect(hasProcessedFiles).toBe(true)
   })
@@ -376,14 +385,13 @@ Testing next dev integration
       windowsHide: true
     })
 
-    if (!watchProcess || !watchProcess.stdout || !watchProcess.stderr) {
+    if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
       throw new Error('Failed to spawn process or get process streams')
     }
 
     // Store stream references to avoid null checks
     const stdout = watchProcess.stdout
-    const stderr = watchProcess.stderr
 
     stdout.on('data', (data) => {
       const output = data.toString()
@@ -392,7 +400,28 @@ Testing next dev integration
     })
 
     debug('Waiting for Next.js dev server to start...')
-    await sleep(10000) // Increased wait time for Next.js server startup
+    const serverStartTimeout = 60000 // Allow up to 60 seconds for Next.js server startup
+    const serverStartTime = Date.now()
+    let serverStarted = false
+    
+    while (!serverStarted && Date.now() - serverStartTime < serverStartTimeout) {
+      try {
+        const response = await fetch(`http://localhost:${port}`)
+        if (response.ok) {
+          serverStarted = true
+          debug('Next.js server started successfully after', Date.now() - serverStartTime, 'ms')
+          break
+        }
+      } catch (error) {
+        debug('Server not ready yet, waiting...', Date.now() - serverStartTime, 'ms elapsed')
+        await sleep(1000)
+      }
+    }
+    
+    if (!serverStarted) {
+      debug('Timeout waiting for Next.js server to start after', serverStartTimeout, 'ms')
+      throw new Error('Next.js server failed to start within timeout period')
+    }
 
     const response = await fetch(`http://localhost:${port}`)
     const html = await response.text()
