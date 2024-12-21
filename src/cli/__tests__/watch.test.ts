@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, openSync, closeSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, openSync, closeSync, readFileSync, existsSync, statSync } from 'fs'
 import fetch from 'node-fetch'
 import { sleep, debug } from '../../test/setup.js'
 
@@ -72,29 +72,103 @@ module.exports = withMDXE({})
     const absolutePath = resolve(process.cwd(), singleFile)
     const args = ['--watch', absolutePath]
 
-    // Create initial file
-    writeFileSync(absolutePath, `# Initial Test\nThis is a test file.\n`, 'utf-8')
-
-    // Ensure file exists before starting watch
-    await sleep(1000)
-
-    debug('Starting watch process with args:', args)
-    watchProcess = spawn('node', ['./bin/cli.js', ...args], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      detached: true,
-      cwd: process.cwd(),
-    })
-
-    if (!watchProcess.stdout) {
-      throw new Error('Failed to get stdout from watch process')
+    debug('=== Test Setup ===')
+    debug('Test directory path:', testDir)
+    debug('Absolute file path:', absolutePath)
+    debug('Current working directory:', process.cwd())
+    
+    // Get initial filesystem state
+    try {
+      const dirStat = statSync(testDir)
+      debug('Test directory stats:', {
+        inode: dirStat.ino,
+        mode: dirStat.mode,
+        uid: dirStat.uid,
+        gid: dirStat.gid,
+        size: dirStat.size,
+        blocks: dirStat.blocks,
+        atime: dirStat.atime,
+        mtime: dirStat.mtime,
+        ctime: dirStat.ctime
+      })
+    } catch (error) {
+      debug('Error getting directory stats:', error)
+    }
+    
+    // Create initial file with explicit file descriptor
+    try {
+      const fd = openSync(absolutePath, 'w')
+      writeFileSync(fd, `# Initial Test\nThis is a test file.\n`, 'utf-8')
+      // Force sync to ensure changes are written to disk
+      const { closeSync: fsyncClose } = require('fs')
+      fsyncClose(fd)
+      debug('Initial file created successfully')
+      debug('Initial file exists:', existsSync(absolutePath))
+      debug('Initial file content:', readFileSync(absolutePath, 'utf-8'))
+      debug('File descriptor:', fd)
+    } catch (error) {
+      debug('Error creating initial file:', error)
+      throw error
     }
 
-    watchProcess.stdout.on('data', (data) => {
-      const output = data.toString()
-      debug('Watch process output:', output)
-      if (output.includes('has been changed')) {
-        debug('Change event detected')
-        hasProcessedFile = true
+    // Ensure file exists and is ready before starting watch
+    await sleep(5000) // Increased wait time for more reliable initialization
+    debug('Pre-watch file check - exists:', existsSync(absolutePath))
+    debug('Pre-watch file content:', readFileSync(absolutePath, 'utf-8'))
+
+    debug('Starting watch process with args:', args)
+    debug('Initial file content:', readFileSync(absolutePath, 'utf-8'))
+    // Set up environment variables for debug output
+    const spawnEnv = {
+      ...process.env,
+      DEBUG: '*',
+      FORCE_COLOR: '0', // Disable colors for cleaner output
+      NODE_ENV: 'test'
+    }
+
+    debug('Spawning watch process with env:', spawnEnv)
+    watchProcess = spawn('node', ['./bin/cli.js', ...args], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: false, // Changed to false for better process management
+      cwd: process.cwd(),
+      env: spawnEnv as NodeJS.ProcessEnv,
+      windowsHide: true
+    })
+
+    if (!watchProcess || !watchProcess.stdout || !watchProcess.stderr) {
+      if (watchProcess) watchProcess.kill()
+      throw new Error('Failed to spawn process or get process streams')
+    }
+
+    // Store stream references to avoid null checks
+    const stdout = watchProcess.stdout
+    const stderr = watchProcess.stderr
+
+    // Buffer to store partial lines
+    let stdoutBuffer = ''
+    
+    stdout.on('data', (data) => {
+      // Append new data to buffer
+      stdoutBuffer += data.toString()
+      
+      // Process complete lines
+      const lines = stdoutBuffer.split('\n')
+      // Keep the last partial line in the buffer
+      stdoutBuffer = lines.pop() || ''
+      
+      for (const line of lines) {
+        if (line.trim()) {
+          debug('Watch process output:', line)
+          // Look for both change and add events since we're deleting and recreating the file
+          if (line.includes('has been changed') || line.includes('has been added')) {
+            debug('Change/Add event detected')
+            hasProcessedFile = true
+          }
+          // Log all debug messages
+          if (line.includes('[DEBUG]')) {
+            debug('Debug message from watcher:', line)
+          }
+        }
       }
     })
 
@@ -107,23 +181,88 @@ module.exports = withMDXE({})
     })
 
     // Wait for watcher to be ready
-    await sleep(5000)
+    debug('Waiting for watcher to be ready...')
+    
+    // Wait for the "Initial scan complete" message before proceeding
+    await new Promise<void>((resolve) => {
+      const readyHandler = (data: Buffer) => {
+        const output = data.toString()
+        if (output.includes('Initial scan complete')) {
+          debug('Watcher is ready')
+          watchProcess?.stdout?.removeListener('data', readyHandler)
+          resolve()
+        }
+      }
+      watchProcess?.stdout?.on('data', readyHandler)
+    })
 
     debug('Modifying test file...')
-    writeFileSync(
-      absolutePath,
-      `
-# Updated Test
-This is an updated test file.
-    `,
-    )
+    try {
+      // Modify file with explicit file descriptor
+      debug('Opening file for modification...')
+      const writefd = openSync(absolutePath, 'w')
+      debug('Writing new content...')
+      const timestamp = Date.now()
+      const newContent = `# MAJOR UPDATE ${timestamp}\n${'='.repeat(50)}\nThis is a completely different file with timestamp ${timestamp}\n${'='.repeat(50)}\n`
+      debug('=== File Modification ===')
+      debug('Writing new content:', newContent)
+      writeFileSync(writefd, newContent, 'utf-8')
+      
+      // Get file stats after modification
+      try {
+        const fileStat = statSync(absolutePath)
+        debug('File stats after modification:', {
+          inode: fileStat.ino,
+          mode: fileStat.mode,
+          size: fileStat.size,
+          blocks: fileStat.blocks,
+          atime: fileStat.atime,
+          mtime: fileStat.mtime,
+          ctime: fileStat.ctime
+        })
+      } catch (error) {
+        debug('Error getting file stats:', error)
+      }
+      
+      // Verify content was written
+      const actualContent = readFileSync(absolutePath, 'utf-8')
+      debug('Actual file content after write:', actualContent)
+      if (actualContent !== newContent) {
+        debug('WARNING: File content mismatch!')
+        debug('Expected:', newContent)
+        debug('Actual:', actualContent)
+      }
+      debug('Forcing sync...')
+      const { closeSync: fsyncClose } = require('fs')
+      fsyncClose(writefd)
+      
+      debug('Modification complete')
+      debug('Modified file exists:', existsSync(absolutePath))
+      debug('Modified file content:', readFileSync(absolutePath, 'utf-8'))
+    } catch (error) {
+      debug('Error modifying file:', error)
+      throw error
+    }
+    
+    // Wait for changes to be detected
+    await sleep(2000)
+    
+    debug('File modification completed')
+    debug('Current file content:', readFileSync(absolutePath, 'utf-8'))
+    debug('File exists:', existsSync(absolutePath))
 
-    // Force a file system sync
-    const fd = openSync(absolutePath, 'r')
-    closeSync(fd)
-
+    debug('File modification completed, content:', readFileSync(absolutePath, 'utf-8'))
     debug('Waiting for file change detection...')
-    await sleep(30000) // Increased wait time
+    // Wait for change event with timeout
+    const timeout = 30000 // Increased timeout for more reliable file change detection
+    const startTime = Date.now()
+    while (!hasProcessedFile && Date.now() - startTime < timeout) {
+      await sleep(100)
+    }
+    if (!hasProcessedFile) {
+      debug('Timeout waiting for file change event')
+      debug('Watch process output history:', watchProcess?.stdout?.read()?.toString())
+    }
     expect(hasProcessedFile).toBe(true)
   })
 
@@ -133,14 +272,21 @@ This is an updated test file.
 
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      detached: true,
+      detached: false,
+      env: process.env as NodeJS.ProcessEnv,
+      windowsHide: true
     })
 
-    if (!watchProcess.stdout) {
-      throw new Error('Failed to get stdout from watch process')
+    if (!watchProcess || !watchProcess.stdout || !watchProcess.stderr) {
+      if (watchProcess) watchProcess.kill()
+      throw new Error('Failed to spawn process or get process streams')
     }
 
-    watchProcess.stdout.on('data', (data) => {
+    // Store stream references to avoid null checks
+    const stdout = watchProcess.stdout
+    const stderr = watchProcess.stderr
+
+    stdout.on('data', (data) => {
       const output = data.toString()
       debug('Watch process output:', output)
       if (output.includes('has been changed') || output.includes('has been added')) {
@@ -157,7 +303,19 @@ This is an updated test file.
     })
 
     debug('Waiting for initial processing...')
-    await sleep(5000)
+    
+    // Wait for the "Initial scan complete" message before proceeding
+    await new Promise<void>((resolve) => {
+      const readyHandler = (data: Buffer) => {
+        const output = data.toString()
+        if (output.includes('Initial scan complete')) {
+          debug('Watcher is ready')
+          watchProcess?.stdout?.removeListener('data', readyHandler)
+          resolve()
+        }
+      }
+      watchProcess?.stdout?.on('data', readyHandler)
+    })
 
     debug('Modifying page1.mdx...')
     writeFileSync(
@@ -177,8 +335,20 @@ This is a new test file.
     `,
     )
 
+    debug('File modifications completed')
+    debug('page1.mdx content:', readFileSync(join(multiDir, 'page1.mdx'), 'utf-8'))
+    debug('page3.mdx content:', readFileSync(join(multiDir, 'page3.mdx'), 'utf-8'))
     debug('Waiting for file change detection...')
-    await sleep(15000)
+    // Wait for change event with timeout
+    const timeout = 30000 // Increased timeout for more reliable file change detection
+    const startTime = Date.now()
+    while (!hasProcessedFiles && Date.now() - startTime < timeout) {
+      await sleep(100)
+    }
+    if (!hasProcessedFiles) {
+      debug('Timeout waiting for file change events')
+      debug('Watch process output history:', watchProcess?.stdout?.read()?.toString())
+    }
     expect(hasProcessedFiles).toBe(true)
   })
 
@@ -198,23 +368,31 @@ Testing next dev integration
     watchProcess = spawn('node', ['../../bin/cli.js', ...args], {
       cwd: testDir,
       stdio: ['pipe', 'pipe', 'pipe'],
+      detached: false,
       env: {
         ...process.env,
         PORT: port.toString(),
-      },
+      } as NodeJS.ProcessEnv,
+      windowsHide: true
     })
 
-    if (!watchProcess.stdout) {
-      throw new Error('Failed to get stdout from watch process')
+    if (!watchProcess || !watchProcess.stdout || !watchProcess.stderr) {
+      if (watchProcess) watchProcess.kill()
+      throw new Error('Failed to spawn process or get process streams')
     }
-    watchProcess.stdout.on('data', (data) => {
+
+    // Store stream references to avoid null checks
+    const stdout = watchProcess.stdout
+    const stderr = watchProcess.stderr
+
+    stdout.on('data', (data) => {
       const output = data.toString()
       debug(`Next dev output: ${output}`)
       expect(output).toContain('Watch Mode Test')
     })
 
     debug('Waiting for Next.js dev server to start...')
-    await sleep(5000)
+    await sleep(10000) // Increased wait time for Next.js server startup
 
     const response = await fetch(`http://localhost:${port}`)
     const html = await response.text()

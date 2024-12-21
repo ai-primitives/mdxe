@@ -7,7 +7,11 @@ import { spawn, type ChildProcess } from 'child_process'
 import type { MDXEConfig } from './config.js'
 
 // Import package.json with type assertion for ESM compatibility
-const pkg = await import('../../package.json', { assert: { type: 'json' } })
+const pkg = {
+  default: {
+    version: process.env.npm_package_version || '0.0.0'
+  }
+}
 
 const explorer = cosmiconfig('mdxe')
 
@@ -162,42 +166,89 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     const patterns = isDirectory ? [`${filepath}/**/*.mdx`, `${filepath}/**/*.md`] : [filepath]
     const absolutePatterns = patterns.map((p) => resolve(process.cwd(), p))
 
-    console.log('Starting watcher with patterns:', absolutePatterns)
-    const watcher = watch(absolutePatterns, {
+    // Use process.stdout.write for immediate flushing
+    process.stdout.write(`[DEBUG] Starting watcher with patterns: ${JSON.stringify(absolutePatterns)}\n`)
+    console.log('[DEBUG] Current working directory:', process.cwd())
+    console.log('[DEBUG] Absolute patterns resolved:', absolutePatterns.map(p => resolve(process.cwd(), p)))
+    
+    const watchOptions = {
       ignored: config.watch?.ignore,
       persistent: true,
       ignoreInitial: false,
       cwd: process.cwd(),
+      usePolling: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 200, // Reduced for faster detection
+        pollInterval: 50
+      },
+      interval: 50, // More frequent polling
+      binaryInterval: 100, // Faster binary file checking
+      alwaysStat: true,
+      atomic: true,
+      followSymlinks: true, // Follow symlinks to catch all file changes
+      depth: undefined // No limit on subdirectory depth
+    }
+    
+    process.stdout.write(`[DEBUG] Watch options: ${JSON.stringify(watchOptions, null, 2)}\n`)
+    const watcher = watch(absolutePatterns, watchOptions)
+
+    console.log('[DEBUG] Watching for changes...')
+    watcher.on('ready', () => {
+      process.stdout.write('[DEBUG] Initial scan complete\n')
+      process.stdout.write(`[DEBUG] Watched paths: ${JSON.stringify(watcher.getWatched())}\n`)
+      // Ensure output is written immediately
+      process.stdout.write('')
+    })
+    // Log all watcher events for debugging
+    watcher.on('all', (event, filePath) => {
+      console.log(`[DEBUG] Watcher event: ${event} on file: ${filePath}`)
+      try {
+        const stats = statSync(filePath)
+        console.log(`[DEBUG] File stats for ${event}:`, {
+          exists: existsSync(filePath),
+          inode: stats.ino,
+          size: stats.size,
+          mtime: stats.mtime,
+          ctime: stats.ctime
+        })
+      } catch (error) {
+        console.log(`[DEBUG] Error getting stats for ${filePath}:`, error)
+      }
     })
 
-    console.log('Watching for changes...')
-    watcher.on('ready', () => console.log('Initial scan complete'))
     watcher.on('add', async (filePath: string | Error) => {
       if (filePath instanceof Error) {
-        console.error('Error in watch handler:', filePath.message)
+        console.error('[DEBUG] Error in add handler:', filePath.message)
         return
       }
       const absolutePath = resolve(process.cwd(), filePath)
-      console.log(`File ${absolutePath} has been added`)
+      console.log(`[DEBUG] File ${absolutePath} has been added`)
+      console.log('[DEBUG] File exists:', existsSync(absolutePath))
+      console.log('[DEBUG] File content:', readFileSync(absolutePath, 'utf-8'))
       try {
         await processMDXFile(absolutePath, config)
+        console.log('[DEBUG] Successfully processed added file')
       } catch (error: unknown) {
         const errorMsg = formatError(error)
-        console.error(`Error processing added file: ${errorMsg}`)
+        console.error(`[DEBUG] Error processing added file: ${errorMsg}`)
       }
     })
+
     watcher.on('change', async (filePath: string | Error) => {
       if (filePath instanceof Error) {
-        console.error('Error in watch handler:', filePath.message)
+        console.error('[DEBUG] Error in change handler:', filePath.message)
         return
       }
       const absolutePath = resolve(process.cwd(), filePath)
-      console.log(`File ${absolutePath} has been changed`)
+      console.log(`[DEBUG] File ${absolutePath} has been changed`)
+      console.log('[DEBUG] File exists:', existsSync(absolutePath))
+      console.log('[DEBUG] File content:', readFileSync(absolutePath, 'utf-8'))
       try {
         await processMDXFile(absolutePath, config)
+        console.log('[DEBUG] Successfully processed changed file')
       } catch (error: unknown) {
         const errorMsg = formatError(error)
-        console.error(`Error processing changed file: ${errorMsg}`)
+        console.error(`[DEBUG] Error processing changed file: ${errorMsg}`)
       }
     })
     watcher.on('error', (error: unknown) => {
