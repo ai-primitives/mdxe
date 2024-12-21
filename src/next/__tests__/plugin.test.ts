@@ -38,10 +38,6 @@ export default function CustomButton({ children }) {
 `
 
   const styledMdxContent = `
----
-title: Styled Test Page
----
-
 import CustomButton from '../components/CustomButton'
 
 # Welcome to Styled MDX
@@ -70,34 +66,73 @@ This page demonstrates style customization and component imports.
       fs.mkdirSync(path.join(testDir, 'styles'), { recursive: true })
       fs.writeFileSync(path.join(testDir, 'styles', 'custom.css'), customStyles)
 
-      // Create app directory with styled MDX
+      // Create app directory structure
       fs.mkdirSync(path.join(testDir, 'app'), { recursive: true })
       fs.mkdirSync(path.join(testDir, 'app', 'styled'), { recursive: true })
+      fs.mkdirSync(path.join(testDir, 'app', 'components'), { recursive: true })
+      
+      // Create root layout.tsx
+      const rootLayout = `
+        import '../styles/custom.css'
+        
+        export const metadata = {
+          title: 'MDX Test App',
+          description: 'Testing MDX integration with Next.js'
+        }
+        
+        export default function RootLayout({
+          children,
+        }: {
+          children: React.ReactNode
+        }) {
+          return (
+            <html lang="en">
+              <body>{children}</body>
+            </html>
+          )
+        }
+      `
+
+      // Create CustomButton component
+      const customButton = `
+        import React from 'react'
+
+        export default function CustomButton({ children }: { children: React.ReactNode }) {
+          return (
+            <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+              {children}
+            </button>
+          )
+        }
+      `
+      
+      fs.writeFileSync(path.join(testDir, 'app', 'layout.tsx'), rootLayout)
+      fs.writeFileSync(path.join(testDir, 'app', 'components', 'CustomButton.tsx'), customButton)
       fs.writeFileSync(path.join(testDir, 'app', 'styled', 'page.mdx'), styledMdxContent)
 
       debug('Creating Next.js configuration...')
       const nextConfig = `
-        const withMDXE = async () => {
-          const { default: mdxe } = await import('${process.cwd()}/dist/index.js')
-          return mdxe.withMDXE
-        }
+        import createMDXPlugin from '@next/mdx'
+        import { withMDXE } from '${process.cwd()}/dist/index.js'
 
         /** @type {import('next').NextConfig} */
-        module.exports = async () => {
-          const plugin = await withMDXE()
-          return plugin({
-            pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
-            experimental: {
-              appDir: true
-            },
-            mdxe: {
-              styleOverrides: true,
-              customComponents: {
-                CustomButton: './components/CustomButton'
-              }
-            }
-          })
+        const baseConfig = {
+          pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
+          experimental: {
+            webpackBuildWorker: true
+          }
         }
+
+        const withMDX = createMDXPlugin({
+          options: {
+            remarkPlugins: [],
+            rehypePlugins: []
+          }
+        })
+
+        const nextConfig = withMDX(baseConfig)
+
+        export default nextConfig
       `
       fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 
@@ -106,6 +141,7 @@ This page demonstrates style customization and component imports.
         name: 'test-next-build',
         version: '1.0.0',
         private: true,
+        type: 'module',
         scripts: {
           build: 'next build',
           start: 'next start',
@@ -116,6 +152,9 @@ This page demonstrates style customization and component imports.
           'react-dom': '^18.2.0',
           '@types/react': '^18.2.0',
           '@types/react-dom': '^18.2.0',
+          '@next/mdx': '^14.0.0',
+          '@mdx-js/react': '^3.0.0',
+          '@types/mdx': '^2.0.0',
         },
       }
       fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
@@ -132,7 +171,7 @@ export default function App({ Component, pageProps }) {
 
       const tsConfig = {
         compilerOptions: {
-          target: 'es5',
+          target: 'es2022',
           lib: ['dom', 'dom.iterable', 'esnext'],
           allowJs: true,
           skipLibCheck: true,
@@ -142,7 +181,7 @@ export default function App({ Component, pageProps }) {
           incremental: true,
           esModuleInterop: true,
           module: 'esnext',
-          moduleResolution: 'node',
+          moduleResolution: 'bundler',
           resolveJsonModule: true,
           isolatedModules: true,
           jsx: 'preserve',
@@ -173,11 +212,21 @@ export default function App({ Component, pageProps }) {
     process.chdir(testDir)
 
     try {
+      // Package.json already created in beforeAll
+
       debug('Installing dependencies...')
       execSync('pnpm install', { stdio: 'inherit' })
 
       debug('Running build...')
-      execSync('pnpm build', { stdio: 'inherit' })
+      try {
+        execSync('pnpm exec next build', { stdio: ['pipe', 'pipe', 'pipe'] })
+      } catch (error) {
+        if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
+          const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
+          debug('Build error details:', execError.stdout?.toString(), execError.stderr?.toString())
+        }
+        throw error
+      }
 
       debug('Verifying build output...')
       const buildDir = path.join(testDir, '.next')
@@ -204,7 +253,7 @@ export default function App({ Component, pageProps }) {
 
     try {
       debug('Running build...')
-      execSync('pnpm build', { stdio: 'inherit' })
+      execSync('pnpm exec next build', { stdio: 'inherit' })
 
       debug('Verifying component imports...')
       const buildDir = path.join(testDir, '.next')

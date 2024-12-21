@@ -5,11 +5,13 @@ export interface MDXEConfig {
   /** MDX compilation options */
   mdxOptions?: CompileOptions
   /** Watch mode configuration */
-  watch?: {
+  watch?: boolean | string | {
     /** Enable watch mode */
     enabled?: boolean
     /** Patterns to ignore */
     ignore?: string[]
+    /** Target file or directory to watch */
+    target?: string
   }
   /** Component import configuration */
   imports?: {
