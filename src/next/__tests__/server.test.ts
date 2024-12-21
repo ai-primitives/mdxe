@@ -14,7 +14,25 @@ describe('Production Server', () => {
   beforeAll(async () => {
     // Create test directory and files
     fs.mkdirSync(testDir, { recursive: true })
-    fs.mkdirSync(path.join(testDir, 'pages'), { recursive: true })
+    fs.mkdirSync(path.join(testDir, 'app'), { recursive: true })
+
+    // Create root layout
+    const rootLayout = `
+      import React from 'react'
+      
+      export default function RootLayout({
+        children,
+      }: {
+        children: React.ReactNode
+      }) {
+        return (
+          <html lang="en">
+            <body>{children}</body>
+          </html>
+        )
+      }
+    `
+    fs.writeFileSync(path.join(testDir, 'app', 'layout.tsx'), rootLayout)
 
     // Create test MDX file
     const mdxContent = `
@@ -26,7 +44,7 @@ title: Production Test
 
 This page tests the production server functionality.
     `
-    fs.writeFileSync(path.join(testDir, 'pages', 'index.mdx'), mdxContent)
+    fs.writeFileSync(path.join(testDir, 'app', 'page.mdx'), mdxContent)
 
     // Create next.config.js
     const nextConfig = `
@@ -35,9 +53,16 @@ This page tests the production server functionality.
         return mdxe.withMDXE
       }
 
+      /** @type {import('next').NextConfig} */
+      const config = {
+        experimental: {
+          appDir: true
+        }
+      }
+
       module.exports = async () => {
         const plugin = await withMDXE()
-        return plugin({})
+        return plugin(config)
       }
     `
     fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
@@ -78,7 +103,7 @@ This page tests the production server functionality.
     }
 
     // Add a small delay after build to ensure everything is ready
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    await setTimeout(2000)
     process.chdir(cwd)
   })
 

@@ -173,31 +173,14 @@ export default function App({ Component, pageProps }) {
     process.chdir(testDir)
 
     try {
-      debug('Creating package.json...')
-      fs.writeFileSync(
-        path.join(testDir, 'package.json'),
-        JSON.stringify({
-          name: 'test-next-app',
-          version: '1.0.0',
-          scripts: {
-            build: 'next build'
-          },
-          dependencies: {
-            next: '14.0.0',
-            react: '18.2.0',
-            'react-dom': '18.2.0',
-            '@types/react': '18.2.0',
-            '@types/react-dom': '18.2.0'
-          }
-        }, null, 2)
-      )
+      // Package.json already created in beforeAll
 
       debug('Installing dependencies...')
       execSync('pnpm install', { stdio: 'inherit' })
 
       debug('Running build...')
       try {
-        execSync('pnpm next build', { stdio: ['pipe', 'pipe', 'pipe'] })
+        execSync('pnpm exec next build', { stdio: ['pipe', 'pipe', 'pipe'] })
       } catch (error) {
         if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
           const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
