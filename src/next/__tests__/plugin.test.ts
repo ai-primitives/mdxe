@@ -116,7 +116,7 @@ This page demonstrates style customization and component imports.
 
       debug('Creating Next.js configuration...')
       const nextConfig = `
-        const { withMDXE } = require('${process.cwd()}/dist')
+        import { withMDXE } from '${process.cwd()}/dist/index.js'
 
         /** @type {import('next').NextConfig} */
         const config = {
@@ -126,7 +126,7 @@ This page demonstrates style customization and component imports.
           }
         }
 
-        module.exports = withMDXE({
+        export default withMDXE({
           ...config,
           mdx: {
             remarkPlugins: [],
@@ -142,6 +142,7 @@ This page demonstrates style customization and component imports.
         name: 'test-next-build',
         version: '1.0.0',
         private: true,
+        type: 'module',
         scripts: {
           build: 'next build',
           start: 'next start',
@@ -168,7 +169,7 @@ export default function App({ Component, pageProps }) {
 
       const tsConfig = {
         compilerOptions: {
-          target: 'es5',
+          target: 'es2022',
           lib: ['dom', 'dom.iterable', 'esnext'],
           allowJs: true,
           skipLibCheck: true,
@@ -178,7 +179,7 @@ export default function App({ Component, pageProps }) {
           incremental: true,
           esModuleInterop: true,
           module: 'esnext',
-          moduleResolution: 'node',
+          moduleResolution: 'bundler',
           resolveJsonModule: true,
           isolatedModules: true,
           jsx: 'preserve',

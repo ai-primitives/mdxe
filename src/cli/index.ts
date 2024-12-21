@@ -96,13 +96,21 @@ function startNextDev(config: MDXEConfig) {
 
 export function parseArgs(args: string[]): CliOptions {
   const options: CliOptions = {}
+  let i = 0
 
-  for (const arg of args) {
+  while (i < args.length) {
+    const arg = args[i]
     if (arg === '-v' || arg === '--version') {
       options.version = true
     } else if (arg === '-h' || arg === '--help') {
       options.help = true
+    } else if (arg === '--watch') {
+      options.watch = { enabled: true }
+      // Skip the --watch flag but keep the target path in args
+      args.splice(i, 1)
+      continue
     }
+    i++
   }
 
   return options
@@ -140,6 +148,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     return
   }
 
+  // Get the target path after handling flags
   const target = args[0]
   if (!target) {
     showHelp() // Show help instead of error
@@ -148,6 +157,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   // Handle file extension assumption
   const filepath = resolve(process.cwd(), target.includes('.') ? target : `${target}.mdx`)
+  console.log('[DEBUG] Resolved filepath:', filepath)
 
   if (!existsSync(filepath) && !existsSync(dirname(filepath))) {
     console.error('File or directory not found:', filepath)
