@@ -40,10 +40,6 @@ export default function CustomButton({ children }) {
   const styledMdxContent = `
 import CustomButton from '../components/CustomButton'
 
-export const metadata = {
-  title: 'Styled Test Page'
-}
-
 # Welcome to Styled MDX
 
 This page demonstrates style customization and component imports.
@@ -119,24 +115,24 @@ This page demonstrates style customization and component imports.
         import createMDXPlugin from '@next/mdx'
         import { withMDXE } from '${process.cwd()}/dist/index.js'
 
-        const withMDX = createMDXPlugin({
-          options: {
-            jsx: true,
-            remarkPlugins: [],
-            rehypePlugins: [],
-            providerImportSource: '@mdx-js/react'
-          }
-        })
-
         /** @type {import('next').NextConfig} */
-        const config = {
+        const baseConfig = {
           pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
           experimental: {
             webpackBuildWorker: true
           }
         }
 
-        export default withMDX(withMDXE(config))
+        const withMDX = createMDXPlugin({
+          options: {
+            remarkPlugins: [],
+            rehypePlugins: []
+          }
+        })
+
+        const nextConfig = withMDX(baseConfig)
+
+        export default nextConfig
       `
       fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 

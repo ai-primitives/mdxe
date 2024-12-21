@@ -36,10 +36,6 @@ describe('Production Server', () => {
 
     // Create test MDX file
     const mdxContent = `
-export const metadata = {
-  title: 'Production Test'
-}
-
 # Production Server Test
 
 This page tests the production server functionality.
@@ -61,17 +57,23 @@ This page tests the production server functionality.
         }
       }
 
+      /** @type {import('next').NextConfig} */
+      const baseConfig = {
+        pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
+        experimental: {
+          webpackBuildWorker: true
+        }
+      }
+
       module.exports = async () => {
         const plugin = await withMDXE()
         const withMDX = (await import('@next/mdx')).default({
           options: {
-            jsx: true,
             remarkPlugins: [],
-            rehypePlugins: [],
-            providerImportSource: '@mdx-js/react'
+            rehypePlugins: []
           }
         })
-        return withMDX(plugin(config))
+        return withMDX(plugin(baseConfig))
       }
     `
     fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
