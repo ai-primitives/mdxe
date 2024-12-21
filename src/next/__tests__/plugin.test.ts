@@ -174,10 +174,19 @@ export default function App({ Component, pageProps }) {
 
     try {
       debug('Installing dependencies...')
-      execSync('pnpm install', { stdio: 'inherit' })
+      debug('Installing dependencies...')
+      execSync('pnpm install next@14.0.0 react@18.2.0 react-dom@18.2.0 @types/react@18.2.0 @types/react-dom@18.2.0', { stdio: 'inherit' })
 
       debug('Running build...')
-      execSync('pnpm build', { stdio: 'inherit' })
+      try {
+        execSync('pnpm build', { stdio: ['pipe', 'pipe', 'pipe'] })
+      } catch (error) {
+        if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
+          const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
+          debug('Build error details:', execError.stdout?.toString(), execError.stderr?.toString())
+        }
+        throw error
+      }
 
       debug('Verifying build output...')
       const buildDir = path.join(testDir, '.next')

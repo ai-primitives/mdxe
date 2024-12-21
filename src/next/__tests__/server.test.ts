@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import fetch from 'node-fetch'
 import { setTimeout } from 'node:timers/promises'
+import { debug } from '../../test/setup.js'
 
 describe('Production Server', () => {
   const testDir = path.join(process.cwd(), 'test-next-server')
@@ -56,8 +57,16 @@ This page tests the production server functionality.
     // Install dependencies and build
     const cwd = process.cwd()
     process.chdir(testDir)
-    execSync('pnpm install next react react-dom', { stdio: 'inherit' })
-    execSync('pnpm build', { stdio: 'inherit' })
+    execSync('pnpm install next@14.0.0 react@18.2.0 react-dom@18.2.0', { stdio: 'inherit' })
+    try {
+      execSync('pnpm build', { stdio: ['pipe', 'pipe', 'pipe'] })
+    } catch (error) {
+      if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
+        const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
+        console.error('Build error details:', execError.stdout?.toString(), execError.stderr?.toString())
+      }
+      throw error
+    }
     process.chdir(cwd)
   })
 
@@ -77,11 +86,26 @@ This page tests the production server functionality.
         detached: true,
       })
 
-      // Wait for server to start
-      await setTimeout(5000)
-
-      // Test server response
-      const response = await fetch(`http://localhost:${port}`)
+      // Wait for server to start and retry connection
+      let response = null
+      const maxRetries = 3
+      const retryDelay = 2000
+      
+      for (let i = 0; i < maxRetries; i++) {
+        await setTimeout(retryDelay)
+        try {
+          response = await fetch(`http://localhost:${port}`)
+          if (response.ok) break
+        } catch (error) {
+          debug(`Attempt ${i + 1}/${maxRetries} failed:`, error instanceof Error ? error.message : String(error))
+          if (i === maxRetries - 1) throw error
+        }
+      }
+      
+      if (!response) {
+        throw new Error('Failed to connect to server after multiple retries')
+      }
+      
       expect(response.ok).toBe(true)
 
       const html = await response.text()
