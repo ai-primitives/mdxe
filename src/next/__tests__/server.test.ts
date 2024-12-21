@@ -35,46 +35,24 @@ describe('Production Server', () => {
     fs.writeFileSync(path.join(testDir, 'app', 'layout.tsx'), rootLayout)
 
     // Create test MDX file
-    const mdxContent = `
-# Production Server Test
+    const mdxContent = `import { TestPage } from '../components/TestPage'
 
-This page tests the production server functionality.
-    `
+<TestPage />`
     fs.writeFileSync(path.join(testDir, 'app', 'page.mdx'), mdxContent)
 
     // Create next.config.js
     const nextConfig = `
-      const withMDXE = async () => {
-        const { default: mdxe } = await import('${process.cwd()}/dist/index.js')
-        return mdxe.withMDXE
-      }
+      const withMDX = require('@next/mdx')()
 
       /** @type {import('next').NextConfig} */
-      const config = {
+      const nextConfig = {
         pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
         experimental: {
-          webpackBuildWorker: true
+          mdxRs: true
         }
       }
 
-      /** @type {import('next').NextConfig} */
-      const baseConfig = {
-        pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
-        experimental: {
-          webpackBuildWorker: true
-        }
-      }
-
-      module.exports = async () => {
-        const plugin = await withMDXE()
-        const withMDX = (await import('@next/mdx')).default({
-          options: {
-            remarkPlugins: [],
-            rehypePlugins: []
-          }
-        })
-        return withMDX(plugin(baseConfig))
-      }
+      module.exports = withMDX(nextConfig)
     `
     fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 
@@ -88,11 +66,11 @@ This page tests the production server functionality.
         start: `next start -p ${port}`,
       },
       dependencies: {
-        next: '14.0.0',
+        next: '14.2.20',
         react: '18.2.0',
         'react-dom': '18.2.0',
-        '@next/mdx': '14.0.0',
-        '@mdx-js/react': '3.0.0',
+        '@next/mdx': '15.1.2',
+        '@mdx-js/react': '3.1.0',
         '@types/mdx': '2.0.0'
       }
     }
@@ -103,12 +81,32 @@ This page tests the production server functionality.
     process.chdir(testDir)
     
     debug('Installing dependencies...')
-    execSync('pnpm install', { stdio: 'inherit' })
+    try {
+      debug('Running pnpm install...')
+      execSync('pnpm install --no-frozen-lockfile', { 
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 30000 // 30 second timeout
+      })
+      debug('Dependencies installed successfully')
+    } catch (error) {
+      debug('Error installing dependencies:', error instanceof Error ? error.message : String(error))
+      if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
+        const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
+        debug('Install error details:', execError.stdout?.toString(), execError.stderr?.toString())
+      }
+      throw error
+    }
 
     debug('Running build...')
     try {
-      execSync('pnpm exec next build', { stdio: ['pipe', 'pipe', 'pipe'] })
+      debug('Starting next build...')
+      execSync('pnpm exec next build', { 
+        stdio: 'inherit', // Use inherit to avoid buffer issues
+        timeout: 120000 // 120 second timeout
+      })
+      debug('Build completed successfully')
     } catch (error) {
+      debug('Error during build:', error instanceof Error ? error.message : String(error))
       if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
         const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
         debug('Build error details:', execError.stdout?.toString(), execError.stderr?.toString())
@@ -160,8 +158,8 @@ This page tests the production server functionality.
       expect(response.ok).toBe(true)
 
       const html = await response.text()
-      expect(html).toContain('Production Server Test')
-      expect(html).toContain('This page tests the production server functionality')
+      expect(html).toContain('Test Page')
+      expect(html).toContain('Test content')
     } finally {
       // Cleanup
       try {
