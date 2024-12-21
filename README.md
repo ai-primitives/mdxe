@@ -3,18 +3,20 @@
 [![npm version](https://badge.fury.io/js/mdxe.svg)](https://www.npmjs.com/package/mdxe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Zero-config MDX processor with NextJS integration, supporting both standalone CLI and plugin modes.
+Zero-config MDX processor with NextJS integration, supporting both standalone CLI and plugin modes. Currently in active development.
 
 ## Features
 
-- 🚀 Zero-config MDX processing
-- ⚡️ NextJS integration (plugin & standalone)
-- 📦 Layout and component exports
-- 🎨 Default Tailwind Typography styling
-- 🔄 File watching and hot reload
-- 📝 App Router metadata support
-- 🌐 Remote component imports (esm.sh)
-- 🤖 AI-powered content generation
+Current and Planned Features:
+
+- 🚀 Zero-config MDX processing (in development)
+- ⚡️ NextJS integration (plugin & standalone) (in development)
+- 📦 Layout and component exports (in development)
+- 🎨 Default Tailwind Typography styling (in development)
+- 🔄 File watching and hot reload (in development)
+- 📝 App Router metadata support (planned)
+- 🌐 Remote component imports (esm.sh) (in development)
+- 🤖 AI-powered content generation (planned)
 
 ## Installation
 
@@ -24,7 +26,7 @@ pnpm add mdxe
 
 ## Usage
 
-### CLI Mode
+### CLI Mode (In Development)
 
 ```bash
 # Process single file
@@ -37,7 +39,7 @@ mdxe ./content
 mdxe dev
 ```
 
-### NextJS Plugin
+### NextJS Plugin (In Development)
 
 ```javascript
 // next.config.js
@@ -48,7 +50,7 @@ export default withMDXE({
 })
 ```
 
-### MDX Exports
+### MDX Exports (In Development)
 
 ```mdx
 export const layout = './layouts/BlogPost'
@@ -81,7 +83,7 @@ export default {
 }
 ```
 
-## AI Generation
+## AI Generation (Planned)
 
 Generate components, pages, and complete sites using AI:
 
@@ -94,7 +96,7 @@ const stream = await generateMDX({
   content: 'Primary action button',
 })
 
-// Note: ShadCN component integration is planned for a future release.
+// Note: ShadCN and other UI component library integrations are planned for future releases.
 ```
 
 See [AI Generation](./docs/ai-generation.md) for complete documentation.

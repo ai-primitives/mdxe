@@ -29,13 +29,18 @@
     - [ ] mdxe.config.js support
 
 - [ ] Styling
+
   - [ ] Tailwind Typography integration
   - [ ] Default styles
   - [ ] Custom style overrides
 
+- [ ] UI Component Integration
+  - [ ] ShadCN integration
+  - [ ] Custom component library support
+
 ## Documentation
 
-- [x] Update README with new features
+- [ ] Update README with current implementation status
 - [x] Document CLI usage
 - [x] Document NextJS integration
 - [ ] Add examples
