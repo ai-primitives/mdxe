@@ -160,12 +160,18 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   const remoteImports = await resolveRemoteImport(remoteOptions);
   const typedImports = remoteImports as RemoteImportResult;
   
-  if (typedImports.layout) {
+  // Handle layout resolution with proper null checks
+  if (typedImports?.layout) {
     mdxLayout = typedImports.layout;
     const layoutStr = typedImports.layoutString || 'undefined';
     processedCode = `export const layout = ${layoutStr}\n${processedCode}`;
+  } else if (options.layout) {
+    // Fallback to options.layout if remote import failed
+    console.warn('Layout import failed, using fallback layout');
+    processedCode = `export const layout = undefined\n${processedCode}`;
   }
-  if (typedImports.components) {
+  // Handle component resolution with proper null checks
+  if (typedImports?.components) {
     mdxComponents = typedImports.components;
     const componentStrs = typedImports.componentStrings || {};
     processedCode = `export const components = {\n${Object.entries(componentStrs)
