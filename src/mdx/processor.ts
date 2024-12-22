@@ -118,11 +118,20 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
 
   // Extract metadata and structured data
   frontmatter = mdxldData.frontmatter || {};
-  yamlld = mdxldData.yamlld || {};
+  const rawYamlld = mdxldData.yamlld || {};
+
+  // Filter yamlld to only include $type and $context
+  yamlld = {
+    $type: rawYamlld.$type,
+    $context: rawYamlld.$context
+  };
 
   // Process structured data and executable code blocks
   if (mdxldData.structured) {
-    yamlld = { ...yamlld, ...mdxldData.structured };
+    const structuredData = mdxldData.structured || {};
+    // Only include $type and $context from structured data
+    if (structuredData.$type) yamlld.$type = structuredData.$type;
+    if (structuredData.$context) yamlld.$context = structuredData.$context;
   }
   if (mdxldData.executable) {
     componentExports += Object.entries(mdxldData.executable)
