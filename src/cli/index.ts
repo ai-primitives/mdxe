@@ -280,30 +280,55 @@ async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
       process.stdout.write(msg + '\n')
     }
 
-    // Set up all event handlers immediately with debug logging
+    // Set up all event handlers with enhanced logging and error handling
     watcher
-      .on('add', path => debugEvent('add', path))
-      .on('change', async (path) => {
-        debugEvent('change', path)
+      .on('add', async (path) => {
+        debugEvent('add', path)
+        const absolutePath = resolve(process.cwd(), path)
         try {
-          await processMDXFile(path, config)
-          log.watcher(`Successfully processed: ${path}`)
-          process.stdout.write(`Successfully processed file: ${path}\n`)
+          await processMDXFile(absolutePath, config)
+          log.watcher(`Successfully processed new file: ${absolutePath}`)
+          process.stdout.write(`Successfully processed new file: ${absolutePath}\n`)
         } catch (error) {
-          log.watcher(`Error processing ${path}:`, error)
-          process.stdout.write(`Error processing file: ${path} - ${error}\n`)
+          const errorMsg = formatError(error)
+          log.watcher(`Error processing new file ${absolutePath}:`, errorMsg)
+          process.stdout.write(`Error processing new file: ${absolutePath} - ${errorMsg}\n`)
         }
       })
-      .on('unlink', path => debugEvent('unlink', path))
-      .on('addDir', path => debugEvent('addDir', path))
-      .on('unlinkDir', path => debugEvent('unlinkDir', path))
+      .on('change', async (path) => {
+        debugEvent('change', path)
+        const absolutePath = resolve(process.cwd(), path)
+        try {
+          await processMDXFile(absolutePath, config)
+          log.watcher(`Successfully processed changed file: ${absolutePath}`)
+          process.stdout.write(`Successfully processed changed file: ${absolutePath}\n`)
+        } catch (error) {
+          const errorMsg = formatError(error)
+          log.watcher(`Error processing changed file ${absolutePath}:`, errorMsg)
+          process.stdout.write(`Error processing changed file: ${absolutePath} - ${errorMsg}\n`)
+        }
+      })
+      .on('unlink', path => {
+        debugEvent('unlink', path)
+        log.watcher(`File removed: ${path}`)
+      })
+      .on('addDir', path => {
+        debugEvent('addDir', path)
+        log.watcher(`Directory added: ${path}`)
+      })
+      .on('unlinkDir', path => {
+        debugEvent('unlinkDir', path)
+        log.watcher(`Directory removed: ${path}`)
+      })
       .on('error', (error) => {
+        const errorMsg = formatError(error)
         debugEvent('error')
-        log.watcher('Watcher error:', error)
-        process.stdout.write(`Watcher error: ${error}\n`)
+        log.watcher('Watcher error:', errorMsg)
+        process.stdout.write(`Watcher error: ${errorMsg}\n`)
       })
       .on('raw', (event, path, details) => {
         debugEvent('raw', `${path} - ${event} - ${JSON.stringify(details)}`)
+        log.watcher('Raw event details:', { event, path, details })
       })
 
     // Set up ready handler with enhanced logging
@@ -345,41 +370,7 @@ async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
       }
     })
 
-    watcher.on('add', async (filePath: string | Error) => {
-      if (filePath instanceof Error) {
-        console.error('Error in add handler:', filePath.message)
-        return
-      }
-      const absolutePath = resolve(process.cwd(), filePath)
-      try {
-        await processMDXFile(absolutePath, config)
-        console.log('Successfully processed file:', absolutePath)
-      } catch (error: unknown) {
-        const errorMsg = formatError(error)
-        console.error('Error processing file:', errorMsg)
-      }
-    })
-
-    watcher.on('change', async (filePath: string | Error) => {
-      if (filePath instanceof Error) {
-        process.stdout.write(`Error in change handler: ${filePath.message}\n`)
-        return
-      }
-      const absolutePath = resolve(process.cwd(), filePath)
-      process.stdout.write(`File ${absolutePath} has been changed\n`)
-      try {
-        await processMDXFile(absolutePath, config)
-        process.stdout.write(`Successfully processed file: ${absolutePath}\n`)
-      } catch (error: unknown) {
-        const errorMsg = formatError(error)
-        process.stdout.write(`Error processing file: ${errorMsg}\n`)
-      }
-    })
-
-    watcher.on('error', (error: unknown) => {
-      const errorMsg = formatError(error)
-      console.error('Watcher error:', errorMsg)
-    })
+    // Event handlers are now consolidated above
 
     // Handle cleanup
     process.on('SIGINT', () => {
