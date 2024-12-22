@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { setTimeout, clearTimeout } from 'node:timers'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch } from 'fs'
 import { sleep, debug } from '../../test/setup.js'
 
 interface ProcessState {
@@ -10,16 +10,22 @@ interface ProcessState {
   changed: boolean
   error: Error | null
   lastOutput: string
+  hasProcessedFile: boolean
+  hasProcessedFiles: boolean
+  fileWatcher: ReturnType<typeof watch> | null
 }
 
 const createProcessState = (): ProcessState => ({
   ready: false,
   changed: false,
   error: null,
-  lastOutput: ''
+  lastOutput: '',
+  hasProcessedFile: false,
+  hasProcessedFiles: false,
+  fileWatcher: null
 })
 
-let processState: ProcessState
+let processState: ProcessState = createProcessState()
 
 const log = {
   test: (msg: string, ...args: unknown[]) => debug(`[TEST] ${msg}`, ...args),
@@ -64,7 +70,7 @@ Initial content for page 2
   })
 
   afterEach(async () => {
-    debug('Cleaning up watch process and test directory...')
+    debug('Cleaning up watch process, file watcher, and test directory...')
     if (watchProcess) {
       try {
         watchProcess.kill('SIGTERM')
@@ -73,6 +79,15 @@ Initial content for page 2
         debug('Error killing watch process:', error)
       }
       watchProcess = null
+    }
+    
+    if (processState.fileWatcher) {
+      try {
+        processState.fileWatcher.close()
+      } catch (error) {
+        debug('Error closing file watcher:', error)
+      }
+      processState.fileWatcher = null
     }
 
     try {
@@ -145,12 +160,13 @@ Initial content for page 2
       
       if (output.includes('Processing file:') || output.includes('File changed:') || output.includes('Watch target:')) {
         processState.changed = true
+        processState.hasProcessedFile = true
         debug('File change detected:', output.trim())
       }
     })
 
     if (!watchProcess.stderr) {
-      if (fileWatcher) fileWatcher.close()
+      if (processState.fileWatcher) processState.fileWatcher.close()
       throw new Error('Failed to get stderr from watch process')
     }
 
@@ -190,7 +206,7 @@ Initial content for page 2
       const cleanup = () => {
         if (timeoutId) clearTimeout(timeoutId)
         if (watchProcess?.stdout) watchProcess.stdout.removeListener('data', handleOutput)
-        if (fileWatcher) fileWatcher.close()
+        if (processState.fileWatcher) processState.fileWatcher.close()
       }
 
       const handleOutput = (data: Buffer) => {
@@ -265,7 +281,7 @@ Initial content for page 2
       debug('File stats:', statSync(absolutePath))
     } catch (error) {
       debug('Error modifying file:', error)
-      if (fileWatcher) fileWatcher.close()
+      if (processState.fileWatcher) processState.fileWatcher.close()
       throw error
     }
 
@@ -275,7 +291,7 @@ Initial content for page 2
     const startTime = Date.now()
     
     // Enhanced waiting logic with file system event verification
-    while (!hasProcessedFile && Date.now() - startTime < timeout) {
+    while (!processState.hasProcessedFile && Date.now() - startTime < timeout) {
       await sleep(100)
       if (!watchProcess || watchProcess.killed) {
         debug('Watch process terminated unexpectedly')
@@ -290,7 +306,7 @@ Initial content for page 2
       }
     }
     
-    if (!hasProcessedFile) {
+    if (!processState.hasProcessedFile) {
       debug('Timeout or failure occurred:', {
         elapsed: Date.now() - startTime,
         timeout,
@@ -353,6 +369,7 @@ Initial content for page 2
       
       if (output.includes('has been changed') || output.includes('Successfully processed file:')) {
         processState.changed = true
+        processState.hasProcessedFiles = true
         debug('File change detected')
       }
     })
@@ -444,7 +461,7 @@ Initial content for page 2
     const startTime = Date.now()
     
     // Enhanced waiting logic with file system event verification
-    while (!hasProcessedFiles && Date.now() - startTime < timeout) {
+    while (!processState.hasProcessedFiles && Date.now() - startTime < timeout) {
       await sleep(100)
       if (!watchProcess || watchProcess.killed) {
         debug('Watch process terminated unexpectedly')
@@ -463,7 +480,7 @@ Initial content for page 2
       }
     }
     
-    if (!hasProcessedFiles) {
+    if (!processState.hasProcessedFiles) {
       debug('Timeout or failure occurred:', {
         elapsed: Date.now() - startTime,
         timeout,

@@ -100,6 +100,29 @@ These test failures are pre-existing infrastructure issues and do not indicate p
 
 The following issues are currently blocking CI builds in PR #17:
 
+1. Environment Standardization:
+   - Node.js Version: Updated package.json to require >=20.18.1
+   - CI Environment: Running on ubuntu-24.04 (upcoming upgrade)
+   - Local Development: Currently on Node.js v22.11.0
+   - Action Taken: Added engines field to enforce version compatibility
+
+2. Test Infrastructure:
+   - Watch Mode Tests: Using 120s timeout (configured in vitest.config.ts)
+   - Test Files: Added required YAML-LD frontmatter to all test MDX files
+   - Hook Timeout: Set to 120s for setup/teardown operations
+   - State Management: Improved process state tracking in watch tests
+
+3. Module Resolution:
+   - Error: Cannot find module 'next-mdxld/dist/components'
+   - Impact: Test failures in remote.test.ts and processor.test.ts
+   - Root Cause: Dependency version mismatch between local and CI
+   - Required Actions:
+     - Update next-mdxld dependency to latest version
+     - Verify module paths in imports
+     - Add proper error handling for missing modules
+
+2. Previous Issues:
+
 1. YAML-LD Property Requirements:
    - Error: "Missing required frontmatter" from remark-mdxld
    - Impact: Test failures in processor.test.ts
