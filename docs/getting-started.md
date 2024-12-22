@@ -1,6 +1,6 @@
 # Getting Started with mdxe
 
-mdxe is a Zero-Config Executable MDX CLI built on NextJS, providing seamless MDX processing with built-in support for layouts, components, and Tailwind Typography.
+mdxe is a Zero-Config Executable MDX CLI providing seamless MDX processing with built-in support for layouts, components, and Tailwind Typography. For Next.js integration, please use [next-mdxld](https://github.com/ai-primitives/next-mdxld).
 
 ## Installation
 
@@ -43,28 +43,13 @@ mdxe --watch myfile.mdx
 mdxe --watch content/
 ```
 
-## NextJS Integration
-
-mdxe works seamlessly with NextJS:
-
-```bash
-# Start development server
-mdxe --next .
-
-# Build for production
-mdxe --next . --build
-
-# Start production server
-mdxe --next . --start
-```
-
 ## Features
 
 - Zero configuration required
 - Built-in Tailwind Typography styling
 - Support for layouts and components
 - Remote component imports from esm.sh
-- NextJS App Router metadata support
+- Metadata support
 - File watching and hot reload
 - Directory processing
 

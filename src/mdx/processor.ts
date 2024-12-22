@@ -1,6 +1,10 @@
+import { resolveRemoteImport, fetchRemoteComponent } from './remote.js'
+
 export interface MDXProcessorOptions {
   filepath: string;
   content?: string;
+  components?: Record<string, string>;
+  layout?: string;
   compileOptions?: Record<string, unknown>;
   watch?: {
     enabled?: boolean;
@@ -15,9 +19,34 @@ export interface ProcessedMDX {
 }
 
 export async function processMDX(options: MDXProcessorOptions): Promise<ProcessedMDX> {
-  // Temporary implementation that returns dummy data
+  const { content = '', components = {}, layout } = options;
+  let processedCode = content;
+  let componentExports = '';
+
+  // Process remote components
+  for (const url of Object.values(components)) {
+    if (url.startsWith('http')) {
+      const code = await fetchRemoteComponent(url);
+      componentExports += `\n${code}\n`;
+    } else {
+      const resolvedUrl = await resolveRemoteImport({ url });
+      const code = await fetchRemoteComponent(resolvedUrl);
+      componentExports += `\n${code}\n`;
+    }
+  }
+
+  // Process remote layout
+  if (layout) {
+    const resolvedUrl = await resolveRemoteImport({ url: layout });
+    const layoutCode = await fetchRemoteComponent(resolvedUrl);
+    componentExports += `\n${layoutCode}\n`;
+  }
+
+  // Combine content with component exports
+  processedCode = `${componentExports}\n${processedCode}`;
+
   return {
-    code: options.content || '',
+    code: processedCode,
     frontmatter: {},
     metadata: {}
   };

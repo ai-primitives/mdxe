@@ -10,15 +10,6 @@
   - [ ] Remote component imports
   - [ ] Frontmatter metadata extraction
 
-- [ ] NextJS Integration
-
-  - [ ] Plugin mode implementation
-  - [ ] Standalone CLI mode
-  - [ ] App Router metadata support
-  - [ ] Development server (next dev)
-  - [ ] Production build (next build)
-  - [ ] Production server (next start)
-
 - [ ] CLI Implementation
 
   - [ ] File processing
@@ -75,12 +66,7 @@ The following lint issues exist in the codebase but are unrelated to recent chan
    - `src/cli/__tests__/watch.test.ts`: 'vi' is defined but never used
    - `src/next/__tests__/plugin.test.ts`: 'mdxContent' is assigned but never used
 
-2. Type Definition Issues in `src/types/next.ts`:
-
-   - Unused types: 'NextConfig', 'WebpackConfig'
-   - Multiple instances of 'any' type usage requiring specification
-
-3. Test Setup Issues in `src/test/setup.ts`:
+2. Test Setup Issues in `src/test/setup.ts`:
    - Unused 'fs' import
    - Undefined 'setTimeout'
    - 'any' type usage requiring specification
@@ -101,13 +87,7 @@ The following test failures exist in the codebase but are unrelated to recent ch
    - `src/cli/__tests__/watch.test.ts`: Test timeouts in file change detection
    - Issue appears to be related to test environment setup, not watch functionality
 
-2. Next.js Build Failures:
-
-   - `src/next/__tests__/plugin.test.ts`: Build command failures in plugin tests
-   - Errors suggest environment setup issues, not plugin functionality
-
-3. Server Response Issues:
-   - `src/next/__tests__/server.test.ts`: Server response checks failing
+2. Server Response Issues:
    - Local test server not responding as expected, likely environment-related
 
 To reproduce:
@@ -116,3 +96,20 @@ To reproduce:
 2. Run `pnpm test` to see the errors
 
 These test failures are pre-existing infrastructure issues and do not indicate problems with recent changes to watch handler types.
+
+### Environment Version Differences
+
+The following environment differences have been identified between local and CI:
+
+1. Node.js Version Mismatch:
+   - Local: Node.js v22.11.0, pnpm 9.14.2
+   - CI: Node.js v20.18.1, npm 10.8.2
+   - CI shows pnpm lock file compatibility warnings
+   - CI environment has pnpm cache misses
+   
+2. Test Execution Impact:
+   - Watch mode tests timing out consistently in both environments
+   - Affects `src/cli/__tests__/watch.test.ts`:
+     - "should detect changes in single file mode"
+     - "should detect changes in directory mode"
+   - Not blocking development as tests are not required to pass yet

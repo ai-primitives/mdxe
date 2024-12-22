@@ -20,13 +20,6 @@ export interface MDXEConfig {
     /** Component aliases */
     aliases?: Record<string, string>
   }
-  /** Next.js integration options */
-  next?: {
-    /** Enable Next.js dev mode */
-    dev?: boolean
-    /** Next.js project directory */
-    dir?: string
-  }
   /** Style configuration */
   styles?: {
     /** Content width (default: 65ch) */
