@@ -8,13 +8,16 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "require": "./dist/index.js",
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./cli": {
+      "import": "./dist/cli.js",
+      "types": "./dist/cli.d.ts"
     }
   },
   "bin": {
-    "mdxe": "bin/cli.js"
+    "mdxe": "./bin/cli.js"
   },
   "files": [
     "dist",
@@ -55,17 +58,17 @@
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@mdx-js/loader": "^3.1.0",
-    "@mdx-js/react": "^3.1.0",
+    "@mdx-js/react": "^3.0.0",
     "@semantic-release/commit-analyzer": "^13.0.0",
     "@semantic-release/github": "^11.0.1",
     "@semantic-release/npm": "^12.0.1",
     "@semantic-release/release-notes-generator": "^14.0.1",
     "@tailwindcss/typography": "^0.5.15",
     "@types/debug": "^4.1.12",
-    "@types/mdx-js__react": "^2.0.0",
+    "@types/mdx-js__react": "^1.5.8",
     "@types/node": "^22.10.2",
     "@types/node-fetch": "^2.6.12",
-    "@types/react": "^19.0.1",
+    "@types/react": "^18.2.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "autoprefixer": "^10.4.20",
@@ -80,6 +83,7 @@
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
-    "webpack": "^5.97.1"
+    "webpack": "^5.97.1",
+    "tsx": "^4.7.0"
   }
 }
