@@ -253,13 +253,13 @@ async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
       persistent: true,
       ignoreInitial: true,
       cwd: process.cwd(),
-      usePolling: false,
+      usePolling: true,      // Enable polling for more reliable detection
       awaitWriteFinish: {
-        stabilityThreshold: 300,  // Wait for writes to finish
-        pollInterval: 100        // Check every 100ms
+        stabilityThreshold: 100,  // Reduce wait time for writes to finish
+        pollInterval: 50         // Check more frequently
       },
-      interval: 100,            // Standard polling interval
-      binaryInterval: 300,      // Standard binary polling
+      interval: 50,             // More frequent polling
+      binaryInterval: 100,      // Faster binary polling
       alwaysStat: true,        // Get detailed file stats
       atomic: true,            // Enable atomic writes detection
       ignorePermissionErrors: true,
@@ -286,26 +286,30 @@ async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
         debugEvent('add', path)
         const absolutePath = resolve(process.cwd(), path)
         try {
+          log.watcher(`Processing file: ${absolutePath}`)
+          process.stdout.write(`Processing file: ${absolutePath}\n`)
           await processMDXFile(absolutePath, config)
-          log.watcher(`Successfully processed new file: ${absolutePath}`)
-          process.stdout.write(`Successfully processed new file: ${absolutePath}\n`)
+          log.watcher(`Successfully processed ${absolutePath}`)
+          process.stdout.write(`Successfully processed ${absolutePath}\n`)
         } catch (error) {
           const errorMsg = formatError(error)
-          log.watcher(`Error processing new file ${absolutePath}:`, errorMsg)
-          process.stdout.write(`Error processing new file: ${absolutePath} - ${errorMsg}\n`)
+          log.watcher(`Error processing file ${absolutePath}:`, errorMsg)
+          process.stdout.write(`Error processing file: ${absolutePath} - ${errorMsg}\n`)
         }
       })
       .on('change', async (path) => {
         debugEvent('change', path)
         const absolutePath = resolve(process.cwd(), path)
         try {
+          log.watcher(`File changed: ${absolutePath}`)
+          process.stdout.write(`File changed: ${absolutePath}\n`)
           await processMDXFile(absolutePath, config)
-          log.watcher(`Successfully processed changed file: ${absolutePath}`)
-          process.stdout.write(`Successfully processed changed file: ${absolutePath}\n`)
+          log.watcher(`Successfully processed ${absolutePath}`)
+          process.stdout.write(`Successfully processed ${absolutePath}\n`)
         } catch (error) {
           const errorMsg = formatError(error)
-          log.watcher(`Error processing changed file ${absolutePath}:`, errorMsg)
-          process.stdout.write(`Error processing changed file: ${absolutePath} - ${errorMsg}\n`)
+          log.watcher(`Error processing file ${absolutePath}:`, errorMsg)
+          process.stdout.write(`Error processing file: ${absolutePath} - ${errorMsg}\n`)
         }
       })
       .on('unlink', path => {
@@ -348,7 +352,8 @@ async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
 
     // Wait for watcher to be ready
     await readyPromise
-    console.log('[DEBUG] Watching for changes...')
+    log.watcher('Watching for changes')
+    process.stdout.write('Watching for changes\n')
 
     // Log all watcher events for debugging
     watcher.on('all', (event: string, filePath: string) => {

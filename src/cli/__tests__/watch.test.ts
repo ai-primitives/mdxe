@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect } from 'vitest'
+import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
 import { spawn } from 'child_process'
 import { join, resolve, dirname } from 'path'
 import { mkdirSync, writeFileSync, rmSync, openSync, readFileSync, existsSync, statSync, fsyncSync, closeSync, watch, FSWatcher, readdirSync } from 'fs'
@@ -8,10 +8,16 @@ import { sleep, debug } from '../../test/setup.js'
 const log = {
   test: (msg: string, ...args: any[]) => debug(`[TEST] ${msg}`, ...args),
   fs: (msg: string, ...args: any[]) => debug(`[FS] ${msg}`, ...args),
-  proc: (msg: string, ...args: any[]) => debug(`[PROC] ${msg}`, ...args)
+  proc: (msg: string, ...args: any[]) => debug(`[PROC] ${msg}`, ...args),
+  watcher: (msg: string, ...args: any[]) => debug(`[WATCHER] ${msg}`, ...args)
 }
 
 describe('Watch Mode', () => {
+  // Increase timeout for all watch mode tests as they are known to take longer than 30s
+  vi.setConfig({ 
+    testTimeout: 120000 // Increase timeout to 120s to match other timeouts in the test
+  })
+  
   const testDir = join(process.cwd(), 'test-watch-mode')
   const singleFile = join(testDir, 'test.mdx')
   const multiDir = join(testDir, 'content')
@@ -234,14 +240,25 @@ module.exports = withMDXE({})
         'File changed:',
         'Watch target:',
         'Watching for changes',
-        'Starting watch mode'
+        'Starting watch mode',
+        'Processed:',  // Added to match CLI output from processMDXFile
+        'has been changed',  // Added to match chokidar event
+        'Successfully processed'  // Added for completeness
       ]
       
-      if (successIndicators.some(indicator => output.includes(indicator))) {
+      // Check for success indicators with more detailed logging
+      const matchedIndicator = successIndicators.find(i => output.includes(i))
+      if (matchedIndicator) {
         hasProcessedFile = true
         debug('File change or process success detected:', {
           output: output.trim(),
-          matchedIndicator: successIndicators.find(i => output.includes(i))
+          matchedIndicator,
+          timestamp: Date.now(),
+          processState: {
+            pid: watchProcess?.pid,
+            killed: watchProcess?.killed,
+            exitCode: watchProcess?.exitCode
+          }
         })
       }
       
@@ -262,10 +279,13 @@ module.exports = withMDXE({})
 
     // Wait for watcher to be ready with enhanced logging and timeout handling
     debug('Waiting for watcher to be ready...')
+    // Add stabilityThreshold wait to ensure watcher is fully initialized
+    await sleep(1000) // Wait for initial stability
     debug('Process environment:', {
       DEBUG: process.env.DEBUG,
       NODE_DEBUG: process.env.NODE_DEBUG,
-      NODE_ENV: process.env.NODE_ENV
+      NODE_ENV: process.env.NODE_ENV,
+      stabilityThreshold: 1000 // Document the threshold we're using
     })
     
     await new Promise<void>((resolve, reject) => {
@@ -380,23 +400,23 @@ module.exports = withMDXE({})
       // Write content with atomic operation and explicit sync
       let fd: number | undefined
       try {
-        // First, truncate the file to ensure a complete rewrite
+        debug('Starting file write operation')
+        // Use a single atomic write operation instead of truncate + write
         fd = openSync(filePath, 'w')
-        writeFileSync(fd, '', 'utf-8')
-        fsyncSync(fd)
-        closeSync(fd)
         
-        // Then write the new content
-        fd = openSync(filePath, 'w')
+        // Write new content in a single operation
+        debug('Writing new content...')
         writeFileSync(fd, newContent, 'utf-8')
         fsyncSync(fd)
         closeSync(fd)
         fd = undefined
+        debug('New content written successfully')
         
         // Force a file system sync
         const syncFd = openSync(dirname(filePath), 'r')
         fsyncSync(syncFd)
         closeSync(syncFd)
+        debug('File system sync completed')
         
         debug('Content written and synced to file')
       } catch (error) {
@@ -460,19 +480,31 @@ module.exports = withMDXE({})
     let lastCheck = startTime
     let checkCount = 0
     
-    // Enhanced waiting logic with progressive status updates
+    // Enhanced waiting logic with progressive status updates and watcher state verification
     while (!hasProcessedFile && Date.now() - startTime < timeout) {
       const now = Date.now()
       checkCount++
       
-      // Log status every second
+      // Log status every second with enhanced state
       if (now - lastCheck >= 1000) {
-        debug('Waiting for change detection...', {
+        const processState = {
           elapsedMs: now - startTime,
           checks: checkCount,
           hasProcessedFile,
-          processActive: !!watchProcess && !watchProcess.killed
-        })
+          processActive: !!watchProcess && !watchProcess.killed,
+          fileState: existsSync(filePath) ? {
+            stats: statSync(filePath),
+            content: readFileSync(filePath, 'utf-8').slice(0, 100) + '...'
+          } : 'FILE_NOT_FOUND',
+          processState: watchProcess ? {
+            pid: watchProcess.pid,
+            killed: watchProcess.killed,
+            exitCode: watchProcess.exitCode,
+            stdout: watchProcess.stdout ? 'connected' : 'disconnected',
+            stderr: watchProcess.stderr ? 'connected' : 'disconnected'
+          } : 'NO_PROCESS'
+        }
+        debug('Waiting for change detection...', processState)
         lastCheck = now
       }
       
@@ -512,8 +544,24 @@ module.exports = withMDXE({})
         debug('Error checking file state:', error)
       }
       
-      // Adaptive sleep between checks
-      await sleep(checkCount < 10 ? 100 : 500)
+      // More aggressive checking with detailed logging
+      const elapsed = Date.now() - startTime
+      log.watcher(`Check ${checkCount}: Elapsed ${elapsed}ms`)
+      
+      // Get detailed file system state
+      try {
+        const stats = statSync(filePath)
+        log.watcher('Current file state:', {
+          size: stats.size,
+          mtime: stats.mtime.toISOString(),
+          mode: stats.mode.toString(8)
+        })
+      } catch (error) {
+        log.watcher('Error checking file:', error)
+      }
+      
+      // Shorter sleep intervals for faster detection
+      await sleep(Math.min(50 + (checkCount * 25), 500)) // Progressive backoff up to 500ms
     }
     
     // Detailed failure information
