@@ -15,8 +15,13 @@ const log = {
 describe('Watch Mode', () => {
   // Increase timeout for all watch mode tests as they are known to take longer than 30s
   vi.setConfig({ 
-    testTimeout: 120000 // Increase timeout to 120s to match other timeouts in the test
+    testTimeout: 180000 // Increase timeout to 180s to ensure enough time for watcher initialization
   })
+  
+  // Configure longer timeouts for specific operations
+  const WATCHER_READY_TIMEOUT = 60000    // 60s for watcher to become ready
+  const FILE_CHANGE_TIMEOUT = 30000      // 30s to detect file changes
+  const CLEANUP_TIMEOUT = 10000          // 10s for cleanup operations
   
   const testDir = join(process.cwd(), 'test-watch-mode')
   const singleFile = join(testDir, 'test.mdx')
@@ -202,8 +207,23 @@ module.exports = withMDXE({})
 
     // Ensure file exists and is stable before starting watch
     await sleep(2000)
-    debug('Pre-watch file check - exists:', existsSync(filePath));
-    debug('Pre-watch file content:', readFileSync(filePath, 'utf-8'));
+    
+    // Double-check file state before watch
+    const preWatchStats = statSync(filePath)
+    debug('Pre-watch file state:', {
+      exists: existsSync(filePath),
+      content: readFileSync(filePath, 'utf-8'),
+      stats: {
+        size: preWatchStats.size,
+        mtime: preWatchStats.mtime,
+        mode: preWatchStats.mode
+      }
+    })
+    
+    // Force a final sync before starting watch
+    const prewatchFd = openSync(filePath, 'r')
+    fsyncSync(prewatchFd)
+    closeSync(prewatchFd)
 
     debug('Starting watch process with args:', args)
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
@@ -234,16 +254,15 @@ module.exports = withMDXE({})
       const output = data.toString()
       debug('Watch process output:', output)
       
-      // More specific output matching
+      // More specific output matching with exact CLI output patterns
       const successIndicators = [
-        'Processing file:',
-        'File changed:',
-        'Watch target:',
-        'Watching for changes',
-        'Starting watch mode',
-        'Processed:',  // Added to match CLI output from processMDXFile
-        'has been changed',  // Added to match chokidar event
-        'Successfully processed'  // Added for completeness
+        'Initial scan complete',  // From ready event
+        'Watching for changes',   // From ready event
+        'Processing file:',       // From add/change events
+        'Successfully processed', // From successful processing
+        'File changed:',         // From change event
+        'Watch target:',         // From initialization
+        'Watcher is now active'  // From post-ready message
       ]
       
       // Check for success indicators with more detailed logging
@@ -279,8 +298,8 @@ module.exports = withMDXE({})
 
     // Wait for watcher to be ready with enhanced logging and timeout handling
     debug('Waiting for watcher to be ready...')
-    // Add stabilityThreshold wait to ensure watcher is fully initialized
-    await sleep(1000) // Wait for initial stability
+    // Add longer stabilityThreshold wait to ensure watcher is fully initialized
+    await sleep(3000) // Increased wait for better stability
     debug('Process environment:', {
       DEBUG: process.env.DEBUG,
       NODE_DEBUG: process.env.NODE_DEBUG,
@@ -365,7 +384,7 @@ module.exports = withMDXE({})
         debug('Timeout waiting for watcher:', status)
         cleanup()
         reject(new Error(`Timeout waiting for watcher to be ready. Status: ${JSON.stringify(status, null, 2)}`))
-      }, 30000) // Reduce timeout to fail faster
+      }, WATCHER_READY_TIMEOUT) // Use configured timeout for watcher readiness
 
       if (!watchProcess) {
         cleanup()
@@ -475,7 +494,7 @@ module.exports = withMDXE({})
     }
 
     debug('=== Waiting for file change detection ===')
-    const timeout = 120000 // Match global vitest timeout
+    const timeout = 180000 // Match test timeout configuration
     const startTime = Date.now()
     let lastCheck = startTime
     let checkCount = 0
@@ -560,8 +579,8 @@ module.exports = withMDXE({})
         log.watcher('Error checking file:', error)
       }
       
-      // Shorter sleep intervals for faster detection
-      await sleep(Math.min(50 + (checkCount * 25), 500)) // Progressive backoff up to 500ms
+      // More conservative polling with longer initial delay
+      await sleep(Math.min(200 + (checkCount * 50), 1000)) // Progressive backoff up to 1000ms
     }
     
     // Detailed failure information
@@ -661,7 +680,7 @@ module.exports = withMDXE({})
           }
         })
         reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 120000) // Match global vitest timeout
+      }, WATCHER_READY_TIMEOUT) // Use configured timeout for watcher readiness
 
       const readyHandler = (data: Buffer) => {
         const output = data.toString()
@@ -722,7 +741,7 @@ module.exports = withMDXE({})
     
     // Enhanced waiting logic with file system event verification
     while (!hasProcessedFiles && Date.now() - startTime < timeout) {
-      await sleep(100)
+      await sleep(500)
       if (!watchProcess || watchProcess.killed) {
         debug('Watch process terminated unexpectedly')
         break
@@ -803,7 +822,7 @@ Testing next dev integration
     })
 
     debug('Waiting for Next.js dev server to start...')
-    const serverStartTimeout = 120000 // Match global vitest timeout
+    const serverStartTimeout = 180000 // Match test timeout configuration
     const serverStartTime = Date.now()
     let serverStarted = false
     

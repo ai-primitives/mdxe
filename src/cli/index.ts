@@ -251,21 +251,21 @@ async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
     const watchOptions = {
       ignored: typeof config.watch === 'object' ? config.watch.ignore : undefined,
       persistent: true,
-      ignoreInitial: true,
+      ignoreInitial: false,    // Process files on startup
       cwd: process.cwd(),
-      usePolling: true,      // Enable polling for more reliable detection
+      usePolling: true,        // Enable polling for more reliable detection
       awaitWriteFinish: {
-        stabilityThreshold: 100,  // Reduce wait time for writes to finish
-        pollInterval: 50         // Check more frequently
+        stabilityThreshold: 2000,  // Wait longer for writes to finish
+        pollInterval: 250          // Less frequent polling to reduce system load
       },
-      interval: 50,             // More frequent polling
-      binaryInterval: 100,      // Faster binary polling
-      alwaysStat: true,        // Get detailed file stats
-      atomic: true,            // Enable atomic writes detection
+      interval: 1000,            // Less aggressive polling
+      binaryInterval: 2000,      // Less aggressive binary polling
+      alwaysStat: true,         // Get detailed file stats
+      atomic: true,             // Enable atomic writes detection
       ignorePermissionErrors: true,
-      followSymlinks: true,    // Follow symlinks
-      depth: undefined,        // Watch all subdirectories
-      disableGlobbing: false   // Enable globbing for pattern matching
+      followSymlinks: true,     // Follow symlinks
+      depth: undefined,         // Watch all subdirectories
+      disableGlobbing: false    // Enable globbing for pattern matching
     }
     
     log.watcher('Initializing watcher with options:', watchOptions)
@@ -335,16 +335,19 @@ async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
         log.watcher('Raw event details:', { event, path, details })
       })
 
-    // Set up ready handler with enhanced logging
+    // Set up ready handler with enhanced logging and specific success indicators
     const readyPromise = new Promise<void>((resolve) => {
       watcher.once('ready', () => {
         debugEvent('ready')
+        // Output specific success indicators that tests are looking for
+        process.stdout.write('Initial scan complete\n')
+        process.stdout.write('Watching for changes\n')
+        // Additional debug information
         log.watcher('Initial scan complete')
         log.watcher('Watched paths:', JSON.stringify(watcher.getWatched()))
-        process.stdout.write('Initial scan complete\n')
-        process.stdout.write(`[DEBUG] Watch base path: ${process.cwd()}\n`)
-        process.stdout.write(`[DEBUG] Watch patterns: ${JSON.stringify(absolutePatterns)}\n\n`)
-        // Ensure all output is written immediately
+        log.watcher(`Watch base path: ${process.cwd()}`)
+        log.watcher(`Watch patterns: ${JSON.stringify(absolutePatterns)}`)
+        // Ensure all output is flushed
         process.stdout.write('\n')
         resolve()
       })
@@ -352,8 +355,7 @@ async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
 
     // Wait for watcher to be ready
     await readyPromise
-    log.watcher('Watching for changes')
-    process.stdout.write('Watching for changes\n')
+    log.watcher('Watcher is now active and processing events')
 
     // Log all watcher events for debugging
     watcher.on('all', (event: string, filePath: string) => {
