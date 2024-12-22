@@ -2,8 +2,24 @@ import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { setTimeout, clearTimeout } from 'node:timers'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch, FSWatcher } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync } from 'fs'
 import { sleep, debug } from '../../test/setup.js'
+
+interface ProcessState {
+  ready: boolean
+  changed: boolean
+  error: Error | null
+  lastOutput: string
+}
+
+const createProcessState = (): ProcessState => ({
+  ready: false,
+  changed: false,
+  error: null,
+  lastOutput: ''
+})
+
+let processState: ProcessState
 
 const log = {
   test: (msg: string, ...args: unknown[]) => debug(`[TEST] ${msg}`, ...args),
@@ -67,8 +83,7 @@ Initial content for page 2
   })
 
   it('should detect changes in single file mode', async () => {
-    let hasProcessedFile = false
-    let fileWatcher: FSWatcher | null = null
+    processState = createProcessState()
     const absolutePath = resolve(process.cwd(), singleFile)
     const args = ['--watch', absolutePath]
 
@@ -87,12 +102,6 @@ Initial content for page 2
       debug('Error creating initial file:', error)
       throw error
     }
-
-    // Set up a file watcher to monitor changes independently
-    fileWatcher = watch(absolutePath)
-    fileWatcher.on('change', (eventType, filename) => {
-      debug('File system event detected:', { eventType, filename })
-    })
 
     // Ensure file exists before starting watch
     await sleep(1000)
@@ -118,7 +127,6 @@ Initial content for page 2
 
     if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
-      if (fileWatcher) fileWatcher.close()
       throw new Error('Failed to spawn process or get process streams')
     }
 
@@ -127,10 +135,17 @@ Initial content for page 2
     
     stdout.on('data', (data) => {
       const output = data.toString()
+      processState.lastOutput = output
       debug('Watch process output:', output)
+      
+      if (output.includes('Initial scan complete')) {
+        processState.ready = true
+        debug('Watch process ready')
+      }
+      
       if (output.includes('Processing file:') || output.includes('File changed:') || output.includes('Watch target:')) {
-        hasProcessedFile = true
-        debug('File change or process success detected:', output.trim())
+        processState.changed = true
+        debug('File change detected:', output.trim())
       }
     })
 
@@ -292,28 +307,16 @@ Initial content for page 2
       })
     }
 
-    // Clean up file watcher
-    if (fileWatcher) {
-      fileWatcher.close()
-    }
-
-    expect(hasProcessedFile).toBe(true)
+    expect(processState.changed).toBe(true)
   })
 
   it('should detect changes in directory mode', async () => {
-    let hasProcessedFiles = false
-    let dirWatcher: FSWatcher | null = null
+    processState = createProcessState()
     const args = ['--watch', multiDir]
 
     debug('=== Directory Mode Test Setup ===')
     debug('Test directory path:', multiDir)
     debug('Current working directory:', process.cwd())
-
-    // Set up directory watcher
-    dirWatcher = watch(multiDir, { recursive: true })
-    dirWatcher.on('change', (eventType, filename) => {
-      debug('Directory watcher event:', { eventType, filename })
-    })
 
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -332,7 +335,6 @@ Initial content for page 2
 
     if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
-      if (dirWatcher) dirWatcher.close()
       throw new Error('Failed to spawn process or get process streams')
     }
 
@@ -341,15 +343,21 @@ Initial content for page 2
 
     stdout.on('data', (data) => {
       const output = data.toString()
+      processState.lastOutput = output
       debug('Watch process output:', output)
+      
+      if (output.includes('Initial scan complete')) {
+        processState.ready = true
+        debug('Watch process ready')
+      }
+      
       if (output.includes('has been changed') || output.includes('Successfully processed file:')) {
-        hasProcessedFiles = true
-        debug('File change or process success detected')
+        processState.changed = true
+        debug('File change detected')
       }
     })
 
     if (!watchProcess.stderr) {
-      if (dirWatcher) dirWatcher.close()
       throw new Error('Failed to get stderr from watch process')
     }
 
@@ -375,7 +383,6 @@ Initial content for page 2
               readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'DIR_NOT_FOUND'
           }
         })
-        if (dirWatcher) dirWatcher.close()
         reject(new Error('Timeout waiting for watcher to be ready'))
       }, 30000)
 
@@ -428,7 +435,6 @@ Initial content for page 2
       })
     } catch (error) {
       debug('Error modifying files:', error)
-      if (dirWatcher) dirWatcher.close()
       throw error
     }
 
@@ -478,12 +484,7 @@ Initial content for page 2
       })
     }
 
-    // Clean up directory watcher
-    if (dirWatcher) {
-      dirWatcher.close()
-    }
-
-    expect(hasProcessedFiles).toBe(true)
+    expect(processState.changed).toBe(true)
   })
 
 })
