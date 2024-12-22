@@ -33,7 +33,7 @@
 
 - [ ] Update README with current implementation status
 - [x] Document CLI usage
-- [x] Document NextJS integration
+- [x] Document next-mdxld integration
 - [ ] Add examples
   - [ ] Basic MDX processing
   - [ ] Layout usage
@@ -50,7 +50,6 @@
     - [ ] Global declarations
   - [ ] Remote component fetching
   - [ ] Cache implementation
-- [ ] NextJS integration
 - [ ] CLI functionality
 - [ ] Watch mode
 - [ ] Configuration parsing

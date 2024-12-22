@@ -1,6 +1,6 @@
 # Getting Started with mdxe
 
-mdxe is a Zero-Config Executable MDX CLI providing seamless MDX processing with built-in support for layouts, components, and Tailwind Typography. For Next.js integration, please use [next-mdxld](https://github.com/ai-primitives/next-mdxld).
+mdxe is a Zero-Config Executable MDX CLI providing seamless MDX processing with built-in support for layouts, components, and Tailwind Typography. For Next.js projects, use [next-mdxld](https://github.com/ai-primitives/next-mdxld) which provides full MDX-LD support.
 
 ## Installation
 

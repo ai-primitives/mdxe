@@ -1,6 +1,6 @@
 # Styling Guide
 
-mdxe provides a comprehensive styling system that combines Tailwind Typography with customizable CSS variables and Next.js integration.
+mdxe provides a comprehensive styling system that combines Tailwind Typography with customizable CSS variables.
 
 ## Default Styling
 
@@ -16,9 +16,9 @@ This content will automatically receive Tailwind Typography styling.
 - And appropriate markers
 ```
 
-## Next.js Integration
+## Integration with next-mdxld
 
-For Next.js integration, please use [next-mdxld](https://github.com/ai-primitives/next-mdxld).
+For Next.js projects, use [next-mdxld](https://github.com/ai-primitives/next-mdxld) which provides full MDX-LD support with the same styling capabilities.
 
 ### Style Configuration
 

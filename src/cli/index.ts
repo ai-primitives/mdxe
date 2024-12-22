@@ -3,7 +3,7 @@ import { watch } from 'chokidar'
 import { resolve, extname, dirname } from 'path'
 import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
-// Removed Next.js related imports
+// Core imports
 import type { MDXEConfig } from './config.js'
 
 // Use console.debug for logging
@@ -89,7 +89,7 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
   }
 }
 
-// Removed Next.js dev server function
+// Process MDX files
 
 export function parseArgs(args: string[]): { options: CliOptions; remainingArgs: string[] } {
   const options: CliOptions = {

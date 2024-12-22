@@ -69,7 +69,7 @@ mdxe --out-dir dist
 # Specify layout
 mdxe --layout layouts/custom
 
-# For Next.js integration, use next-mdxld
+# Configuration Guide
 
 # Help
 mdxe --help
@@ -91,9 +91,9 @@ mdxe --help
 - `MDXE_CACHE_DIR`: Custom cache directory for remote components
 - `MDXE_DISABLE_CACHE`: Disable remote component caching
 
-## Next.js Integration
+## Integration with next-mdxld
 
-For Next.js integration, please use [next-mdxld](https://github.com/ai-primitives/next-mdxld).
+For Next.js projects, use [next-mdxld](https://github.com/ai-primitives/next-mdxld) which provides full MDX-LD support.
 
 ## App Router Metadata
 
