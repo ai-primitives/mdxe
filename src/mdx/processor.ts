@@ -67,13 +67,33 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
     }
   }
 
-  // Process MDX content with remark-mdxld and remark-gfm plugins
+  // Process MDX content with enhanced remark plugins for full MDX-LD support
   const result = await compile(content, {
     remarkPlugins: [
-      remarkGfm,
-      [remarkMdxld, { 
+      // Enable GitHub Flavored Markdown features
+      [remarkGfm, {
+        tables: true,
+        taskLists: true,
+        strikethrough: true,
+        autolink: true
+      }],
+      // Configure remark-mdxld with full YAML-LD and component support
+      [remarkMdxld, {
+        // MDX-LD specific options
         context: options.context,
-        type: options.type
+        type: options.type,
+        // Enable YAML-LD frontmatter processing
+        yamlld: true,
+        // Support both @ and $ prefixes in frontmatter
+        prefixes: ['@', '$'],
+        // Enable URI-based component imports
+        components: true,
+        // Enable remote layout resolution
+        layouts: true,
+        // Enable structured data processing
+        structured: true,
+        // Enable executable code blocks
+        executable: true
       }]
     ],
     jsx: true,
@@ -81,10 +101,33 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
     development: process.env.NODE_ENV === 'development'
   });
 
-  // Extract frontmatter and YAML-LD from remarkMdxld plugin
-  const mdxldData = (result as { data?: { mdxld?: { frontmatter?: Record<string, unknown>; yamlld?: Record<string, unknown> } } }).data?.mdxld || {};
+  // Extract and process structured data from remarkMdxld plugin
+  const mdxldData = (result as {
+    data?: {
+      mdxld?: {
+        frontmatter?: Record<string, unknown>;
+        yamlld?: Record<string, unknown>;
+        components?: Record<string, string>;
+        layout?: string;
+        structured?: Record<string, unknown>;
+        executable?: Record<string, string>;
+      }
+    }
+  }).data?.mdxld || {};
+
+  // Extract metadata and structured data
   frontmatter = mdxldData.frontmatter || {};
   yamlld = mdxldData.yamlld || {};
+
+  // Process structured data and executable code blocks
+  if (mdxldData.structured) {
+    yamlld = { ...yamlld, ...mdxldData.structured };
+  }
+  if (mdxldData.executable) {
+    componentExports += Object.entries(mdxldData.executable)
+      .map(([name, code]) => `export const ${name} = ${code};`)
+      .join('\n') + '\n';
+  }
 
   // Process remote components and layouts from frontmatter
   const remoteOptions: RemoteImportOptions = {
