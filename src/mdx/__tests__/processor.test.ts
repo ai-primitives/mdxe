@@ -23,7 +23,7 @@ datePublished: ${new Date().toISOString()}
 author:
   $type: Person
   name: Test Author
-layout: @layouts/blog/simple
+layout: '@layouts/blog/simple'
 ---
 
 # Hello World`
@@ -67,7 +67,7 @@ datePublished: ${new Date().toISOString()}
 author:
   $type: Person
   name: Test Author
-layout: @layouts/blog/simple
+layout: '@layouts/blog/simple'
 ---
 
 # Hello World`
@@ -109,7 +109,7 @@ datePublished: ${new Date().toISOString()}
 author:
   $type: Person
   name: Test Author
-layout: @layouts/blog/simple
+layout: '@layouts/blog/simple'
 ---
 
 # Hello World`
