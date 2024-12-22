@@ -96,12 +96,30 @@ To reproduce:
 
 These test failures are pre-existing infrastructure issues and do not indicate problems with recent changes to watch handler types.
 
-### TypeScript Type Definition Issues
+### Integration Issues
 
-The following TypeScript errors are currently blocking CI builds:
+The following issues are currently blocking CI builds in PR #17:
 
-1. YAML-LD Property Type Definitions:
-   - File: `src/mdx/processor.ts` (lines 133-134)
+1. YAML-LD Property Requirements:
+   - Error: "Missing required frontmatter" from remark-mdxld
+   - Impact: Test failures in processor.test.ts
+   - Required Properties:
+     - $type (required by remark-mdxld)
+     - $context (required by remark-mdxld)
+   - Cross-Repository Impact:
+     - mdxe: Blocking CI builds
+     - next-mdxld: Needs documentation update for required fields
+
+2. Watch Mode Test Failures:
+   - Error: "fileWatcher is not defined"
+   - Error: "Timeout waiting for watcher to be ready"
+   - Impact: Test failures in watch.test.ts
+   - Affected Tests:
+     - "should detect changes in single file mode"
+     - "should detect changes in directory mode"
+
+3. Type Definition Issues:
+   - File: `src/mdx/processor.ts`
    - Active Issues:
      - Property '$type' does not exist on type '{}'
      - Property '$context' does not exist on type '{}'
@@ -109,20 +127,18 @@ The following TypeScript errors are currently blocking CI builds:
      - Type definitions added but not properly recognized
      - ProcessedMDX['yamlld'] type not correctly narrowing
      - Using $ prefix as per W3C YAML-LD specification
-   - Cross-Repository Impact:
-     - mdxe: Blocking CI builds in PR #17
-     - next-mdxld: May require type definition updates
 
 To reproduce:
 1. Run `pnpm install`
-2. Run `pnpm build`
-3. TypeScript errors occur in processor.ts:
-   ```typescript
-   if ('$type' in structuredData) yamlld.$type = structuredData.$type;
-   if ('$context' in structuredData) yamlld.$context = structuredData.$context;
+2. Run `pnpm test`
+3. Observe errors:
+   ```
+   Error: Missing required frontmatter
+   ReferenceError: fileWatcher is not defined
+   Error: Timeout waiting for watcher to be ready
    ```
 
-Investigation ongoing to resolve type recognition issues between mdxe and next-mdxld packages.
+Investigation ongoing to resolve integration issues between mdxe and remark-mdxld packages.
 
 ### Environment Version Differences
 
