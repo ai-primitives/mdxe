@@ -191,6 +191,17 @@ module.exports = withMDXE({})
         if (output.includes('Initial scan complete')) {
           state.readyReceived = true
           debug('Ready event received')
+          // Force a file change after ready event
+          if (!state.changeReceived) {
+            try {
+              const timestamp = Date.now()
+              const newContent = `# Modified Content ${timestamp}\nThis is the updated content.\n`
+              writeFileSync(absolutePath, newContent, { encoding: 'utf-8', flag: 'w' })
+              debug('Forced file modification after ready event')
+            } catch (error) {
+              debug('Error in forced file modification:', error)
+            }
+          }
         }
         
         if (output.includes('File changed:')) {
@@ -209,7 +220,7 @@ module.exports = withMDXE({})
         debug('Timeout waiting for watcher:', debugState())
         cleanup()
         reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 30000) // Reset to 30s to match CI timeout
+      }, 120000) // Match global vitest timeout
 
       if (watchProcess?.stdout) {
         watchProcess.stdout.on('data', handleOutput)

@@ -34,6 +34,20 @@ describe('Production Server', () => {
     `
     fs.writeFileSync(path.join(testDir, 'app', 'layout.tsx'), rootLayout)
 
+    // Create components directory and TestPage component
+    fs.mkdirSync(path.join(testDir, 'components'), { recursive: true })
+    const testComponent = `
+export function TestPage() {
+  return (
+    <div>
+      <h1>Test Page</h1>
+      <p>Test content</p>
+    </div>
+  )
+}
+`
+    fs.writeFileSync(path.join(testDir, 'components', 'TestPage.tsx'), testComponent)
+
     // Create test MDX file
     const mdxContent = `import { TestPage } from '../components/TestPage'
 
@@ -42,8 +56,9 @@ describe('Production Server', () => {
 
     // Create next.config.js
     const nextConfig = `
-      const withMDX = require('@next/mdx')()
-
+      const createMDXPlugin = require('@next/mdx')
+      
+      
       /** @type {import('next').NextConfig} */
       const nextConfig = {
         pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
@@ -51,6 +66,15 @@ describe('Production Server', () => {
           mdxRs: true
         }
       }
+
+      const withMDX = createMDXPlugin({
+        extension: /\\.mdx?$/,
+        options: {
+          remarkPlugins: [],
+          rehypePlugins: [],
+          providerImportSource: "@mdx-js/react"
+        }
+      })
 
       module.exports = withMDX(nextConfig)
     `
@@ -66,15 +90,46 @@ describe('Production Server', () => {
         start: `next start -p ${port}`,
       },
       dependencies: {
-        next: '14.2.20',
+        next: '14.0.4',
         react: '18.2.0',
         'react-dom': '18.2.0',
-        '@next/mdx': '15.1.2',
-        '@mdx-js/react': '3.1.0',
-        '@types/mdx': '2.0.0'
+        '@next/mdx': '14.0.4',
+        '@mdx-js/react': '3.0.0',
+        '@mdx-js/loader': '3.0.0',
+        '@types/mdx': '2.0.10',
+        '@types/react': '18.2.0',
+        '@types/react-dom': '18.2.0',
+        'typescript': '5.3.3'
       }
     }
     fs.writeFileSync(path.join(testDir, 'package.json'), JSON.stringify(packageJson, null, 2))
+
+    // Create tsconfig.json
+    const tsConfig = {
+      compilerOptions: {
+        target: "es5",
+        lib: ["dom", "dom.iterable", "esnext"],
+        allowJs: true,
+        skipLibCheck: true,
+        strict: true,
+        noEmit: true,
+        esModuleInterop: true,
+        module: "esnext",
+        moduleResolution: "bundler",
+        resolveJsonModule: true,
+        isolatedModules: true,
+        jsx: "preserve",
+        incremental: true,
+        plugins: [
+          {
+            name: "next"
+          }
+        ]
+      },
+      include: ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+      exclude: ["node_modules"]
+    }
+    fs.writeFileSync(path.join(testDir, 'tsconfig.json'), JSON.stringify(tsConfig, null, 2))
 
     // Install dependencies and build
     const cwd = process.cwd()
@@ -84,33 +139,45 @@ describe('Production Server', () => {
     try {
       debug('Running pnpm install...')
       execSync('pnpm install --no-frozen-lockfile', { 
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 30000 // 30 second timeout
+        stdio: 'inherit',
+        timeout: 60000, // 60 second timeout
+        env: {
+          ...process.env,
+          NEXT_TELEMETRY_DISABLED: '1',
+          NODE_ENV: 'development'
+        }
       })
       debug('Dependencies installed successfully')
     } catch (error) {
-      debug('Error installing dependencies:', error instanceof Error ? error.message : String(error))
-      if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
-        const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
-        debug('Install error details:', execError.stdout?.toString(), execError.stderr?.toString())
-      }
+      debug('Error installing dependencies:', error)
       throw error
     }
 
     debug('Running build...')
     try {
       debug('Starting next build...')
+      // Create next-env.d.ts first
+      execSync('pnpm exec next env', { 
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          NEXT_TELEMETRY_DISABLED: '1',
+          NODE_ENV: 'production'
+        }
+      })
+      
       execSync('pnpm exec next build', { 
-        stdio: 'inherit', // Use inherit to avoid buffer issues
-        timeout: 120000 // 120 second timeout
+        stdio: 'inherit',
+        timeout: 120000, // 120 second timeout
+        env: {
+          ...process.env,
+          NEXT_TELEMETRY_DISABLED: '1',
+          NODE_ENV: 'production'
+        }
       })
       debug('Build completed successfully')
     } catch (error) {
-      debug('Error during build:', error instanceof Error ? error.message : String(error))
-      if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
-        const execError = error as { stdout: Buffer | null; stderr: Buffer | null }
-        debug('Build error details:', execError.stdout?.toString(), execError.stderr?.toString())
-      }
+      debug('Error during build:', error)
       throw error
     }
 
@@ -131,8 +198,29 @@ describe('Production Server', () => {
     try {
       // Start production server
       serverProcess = spawn('pnpm', ['start'], {
-        stdio: 'pipe',
+        stdio: ['pipe', 'pipe', 'pipe'],
         detached: true,
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          PORT: port.toString(),
+          NEXT_TELEMETRY_DISABLED: '1'
+        }
+      })
+
+      // Handle server process output for debugging
+      if (serverProcess.stdout) {
+        serverProcess.stdout.on('data', (data) => {
+          debug('Server stdout:', data.toString())
+        })
+      }
+      if (serverProcess.stderr) {
+        serverProcess.stderr.on('data', (data) => {
+          debug('Server stderr:', data.toString())
+        })
+      }
+      serverProcess.on('error', (error) => {
+        debug('Server process error:', error)
       })
 
       // Wait for server to start and retry connection

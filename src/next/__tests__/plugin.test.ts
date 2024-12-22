@@ -219,7 +219,14 @@ export default function App({ Component, pageProps }) {
 
       debug('Running build...')
       try {
-        execSync('pnpm exec next build', { stdio: ['pipe', 'pipe', 'pipe'] })
+        execSync('NODE_ENV=production pnpm exec next build', { 
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          NEXT_TELEMETRY_DISABLED: '1'
+        }
+      })
       } catch (error) {
         if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
           const execError = error as { stdout: Buffer | null; stderr: Buffer | null }

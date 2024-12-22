@@ -1,0 +1,20 @@
+{
+  "name": "test-next-build",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@next/mdx": "^14.0.0",
+    "@mdx-js/react": "^3.0.0",
+    "@types/mdx": "^2.0.0"
+  }
+}

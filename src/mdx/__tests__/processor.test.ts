@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, MockedFunction } from 'vitest'
-import { processMDX } from '../processor'
-import { resolveRemoteImport, fetchRemoteComponent } from '../remote'
+import { processMDX } from '../processor.js'
+import { resolveRemoteImport, fetchRemoteComponent } from '../remote.js'
 
 vi.mock('../remote', () => ({
   resolveRemoteImport: vi.fn(),
