@@ -1,4 +1,5 @@
 import { describe, it, beforeEach, afterEach, expect } from 'vitest'
+import { setTimeout, clearTimeout } from 'node:timers'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
 import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch, FSWatcher } from 'fs'

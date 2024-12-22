@@ -24,7 +24,7 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   let componentExports = '';
 
   // Process remote components
-  for (const [name, url] of Object.entries(components)) {
+  for (const url of Object.values(components)) {
     if (url.startsWith('http')) {
       const code = await fetchRemoteComponent(url);
       componentExports += `\n${code}\n`;

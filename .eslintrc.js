@@ -4,6 +4,10 @@ module.exports = {
     node: true,
     es2022: true
   },
+  globals: {
+    setTimeout: true,
+    clearTimeout: true
+  },
   extends: [
     'plugin:@typescript-eslint/recommended'
   ],
@@ -16,6 +20,10 @@ module.exports = {
     tsconfigRootDir: __dirname
   },
   rules: {
-    '@typescript-eslint/no-unused-vars': 'error'
+    '@typescript-eslint/no-unused-vars': ['error', { 
+      'varsIgnorePattern': '^_',
+      'argsIgnorePattern': '^_',
+      'destructuredArrayIgnorePattern': '^_'
+    }]
   }
 }
