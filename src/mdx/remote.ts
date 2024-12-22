@@ -6,23 +6,67 @@ import os from 'os'
 interface RemoteImportOptions {
   url: string
   version?: string
+  context?: string
 }
 
 const CACHE_DIR = path.join(os.tmpdir(), 'mdxe-remote-cache')
 const FILE_EXTENSIONS = ['.tsx', '.jsx', '.ts', '.js']
 
-export async function resolveRemoteImport({ url, version }: RemoteImportOptions): Promise<string> {
+// Default component mappings for known types
+const defaultComponents: Record<string, string> = {
+  'https://schema.org/BlogPosting': 'https://esm.sh/@mdxui/blog/components/BlogPosting',
+  'https://schema.org/WebSite': 'https://esm.sh/@mdxui/site/components/Website',
+  'https://mdx.org.ai/API': 'https://esm.sh/@mdxui/api/components/API',
+  'https://mdx.org.ai/Agent': 'https://esm.sh/@mdxui/agent/components/Agent'
+}
+
+// Context-specific component mappings
+const contextComponents: Record<string, Record<string, string>> = {
+  'https://mdx.org.ai/docs': {
+    'https://schema.org/BlogPosting': 'https://esm.sh/@mdxui/docs/components/BlogPosting',
+    'https://mdx.org.ai/API': 'https://esm.sh/@mdxui/docs/components/API'
+  }
+}
+
+// Default layout mappings
+const defaultLayouts: Record<string, string> = {
+  'https://schema.org/BlogPosting': 'https://esm.sh/@mdxui/blog/layouts/default',
+  'https://schema.org/WebSite': 'https://esm.sh/@mdxui/site/layouts/default',
+  'https://mdx.org.ai/API': 'https://esm.sh/@mdxui/api/layouts/default',
+  'https://mdx.org.ai/Agent': 'https://esm.sh/@mdxui/agent/layouts/default'
+}
+
+// Context-specific layout mappings
+const contextLayouts: Record<string, Record<string, string>> = {
+  'https://mdx.org.ai/docs': {
+    'https://schema.org/BlogPosting': 'https://esm.sh/@mdxui/docs/layouts/blog',
+    'https://mdx.org.ai/API': 'https://esm.sh/@mdxui/docs/layouts/api'
+  }
+}
+
+export async function resolveRemoteImport({ url, version, context }: RemoteImportOptions): Promise<string> {
   // Handle esm.sh URLs
   if (url.startsWith('https://esm.sh/')) {
     return url // Already in correct format
   }
 
+  // Check if URL is a known type and context is provided
+  if (context && contextComponents[context]?.[url]) {
+    return contextComponents[context][url]
+  }
+
+  // Check if URL is a known type
+  if (defaultComponents[url]) {
+    return defaultComponents[url]
+  }
+
   // Convert package name to esm.sh URL
   const baseUrl = 'https://esm.sh'
   const packageName = url.startsWith('@') ? url : url.split('/')[0]
+  const subPath = url.startsWith('@') ? url.split('/').slice(2).join('/') : url.split('/').slice(1).join('/')
   const versionSuffix = version ? `@${version}` : ''
-
-  return `${baseUrl}/${packageName}${versionSuffix}`
+  
+  return `${baseUrl}/${packageName}${versionSuffix}${subPath ? `/${subPath}` : ''}`
 }
 
 export async function fetchRemoteComponent(url: string, baseDir?: string): Promise<string> {

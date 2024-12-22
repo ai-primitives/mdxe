@@ -3,7 +3,7 @@
 [![npm version](https://badge.fury.io/js/mdxe.svg)](https://www.npmjs.com/package/mdxe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Zero-config MDX processor with standalone CLI mode. For Next.js integration, please use [next-mdxld](https://github.com/ai-primitives/next-mdxld). Currently in active development.
+Zero-config MDX processor with standalone CLI mode and MDX-LD support. For Next.js projects, use [next-mdxld](https://github.com/ai-primitives/next-mdxld) which provides full MDX-LD integration. Currently in active development.
 
 ## Features
 

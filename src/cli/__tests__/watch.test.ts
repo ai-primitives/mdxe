@@ -44,7 +44,7 @@ Initial content for page 2
     `,
     )
 
-    // Next.js config file creation removed - now handled by next-mdxld
+    // Configuration handled by mdxe.config.js
   })
 
   afterEach(async () => {
