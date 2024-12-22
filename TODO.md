@@ -114,12 +114,14 @@ The following issues are currently blocking CI builds in PR #17:
 
 3. Module Resolution:
    - Error: Cannot find module 'next-mdxld/dist/components'
-   - Impact: Test failures in remote.test.ts and processor.test.ts
-   - Root Cause: Dependency version mismatch between local and CI
+   - Error: Cannot find module 'remark-mdxld/dist/yaml-ld'
+   - Impact: Test failures in remote.test.ts, processor.test.ts, and watch.test.ts
+   - Root Cause: Module resolution issues in both local and CI environments
    - Required Actions:
-     - Update next-mdxld dependency to latest version
+     - Update next-mdxld and remark-mdxld dependencies to latest versions
      - Verify module paths in imports
      - Add proper error handling for missing modules
+     - Investigate remark-mdxld package structure and yaml-ld module location
 
 2. Previous Issues:
 
