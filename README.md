@@ -104,17 +104,21 @@ See [AI Generation](./docs/ai-generation.md) for complete documentation.
 ## Development
 
 ```bash
-# Install dependencies
+# Remove everything that could cause issues
+rm -rf dist node_modules
+pnpm unlink --global
+
+# Fresh install
 pnpm install
 
-# Run tests
-pnpm test
-
-# Build the package
+# Build
 pnpm build
 
-# Format code
-pnpm format
+# Link globally
+pnpm link --global
+
+# Test
+mdxe --version
 ```
 
 ## License
