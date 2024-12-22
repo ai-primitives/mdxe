@@ -3,120 +3,127 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
 
-interface RemoteImportOptions {
-  url: string
-  version?: string
-  context?: string
-}
+import { resolveComponent, resolveLayout } from 'next-mdxld'
+import type { ComponentResolutionOptions, LayoutResolutionOptions, RemoteImportOptions, RemoteImportResult } from '../types/remote.js'
 
 const CACHE_DIR = path.join(os.tmpdir(), 'mdxe-remote-cache')
 const FILE_EXTENSIONS = ['.tsx', '.jsx', '.ts', '.js']
+const ALLOWED_DOMAINS = ['esm.sh', 'cdn.skypack.dev', 'unpkg.com']
 
-// Default component mappings for known types
-const defaultComponents: Record<string, string> = {
-  'https://schema.org/BlogPosting': 'https://esm.sh/@mdxui/blog/components/BlogPosting',
-  'https://schema.org/WebSite': 'https://esm.sh/@mdxui/site/components/Website',
-  'https://mdx.org.ai/API': 'https://esm.sh/@mdxui/api/components/API',
-  'https://mdx.org.ai/Agent': 'https://esm.sh/@mdxui/agent/components/Agent'
-}
+export async function resolveRemoteImport({ url, version, context }: RemoteImportOptions): Promise<RemoteImportResult | null> {
+  try {
+    // Validate URL domain if it's a full URL
+    if (url.startsWith('http')) {
+      const urlObj = new URL(url)
+      if (!ALLOWED_DOMAINS.some(domain => urlObj.hostname === domain)) {
+        throw new Error(`Domain ${urlObj.hostname} not allowed for remote imports`)
+      }
+    }
 
-// Context-specific component mappings
-const contextComponents: Record<string, Record<string, string>> = {
-  'https://mdx.org.ai/docs': {
-    'https://schema.org/BlogPosting': 'https://esm.sh/@mdxui/docs/components/BlogPosting',
-    'https://mdx.org.ai/API': 'https://esm.sh/@mdxui/docs/components/API'
+    // Convert package name to esm.sh URL if needed
+    const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}${version ? `@${version}` : ''}`
+
+    // Attempt to resolve as component first
+    const componentOptions: ComponentResolutionOptions = {
+      type: resolvedUrl,
+      context,
+      components: {}
+    }
+    const component = await resolveComponent(componentOptions)
+    if (component) {
+      return { components: { [resolvedUrl]: component } }
+    }
+
+    // Try resolving as layout
+    const layoutOptions: LayoutResolutionOptions = {
+      type: resolvedUrl,
+      context,
+      layouts: {}
+    }
+    const layout = await resolveLayout(layoutOptions)
+    if (layout) {
+      return { layout: resolvedUrl }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Failed to resolve remote import:', error)
+    return null
   }
-}
-
-// Default layout mappings
-const defaultLayouts: Record<string, string> = {
-  'https://schema.org/BlogPosting': 'https://esm.sh/@mdxui/blog/layouts/default',
-  'https://schema.org/WebSite': 'https://esm.sh/@mdxui/site/layouts/default',
-  'https://mdx.org.ai/API': 'https://esm.sh/@mdxui/api/layouts/default',
-  'https://mdx.org.ai/Agent': 'https://esm.sh/@mdxui/agent/layouts/default'
-}
-
-// Context-specific layout mappings
-const contextLayouts: Record<string, Record<string, string>> = {
-  'https://mdx.org.ai/docs': {
-    'https://schema.org/BlogPosting': 'https://esm.sh/@mdxui/docs/layouts/blog',
-    'https://mdx.org.ai/API': 'https://esm.sh/@mdxui/docs/layouts/api'
-  }
-}
-
-export async function resolveRemoteImport({ url, version, context }: RemoteImportOptions): Promise<string> {
-  // Handle esm.sh URLs
-  if (url.startsWith('https://esm.sh/')) {
-    return url // Already in correct format
-  }
-
-  // Check if URL is a known type and context is provided
-  if (context && contextComponents[context]?.[url]) {
-    return contextComponents[context][url]
-  }
-
-  // Check if URL is a known type
-  if (defaultComponents[url]) {
-    return defaultComponents[url]
-  }
-
-  // Convert package name to esm.sh URL
-  const baseUrl = 'https://esm.sh'
-  const packageName = url.startsWith('@') ? url : url.split('/')[0]
-  const subPath = url.startsWith('@') ? url.split('/').slice(2).join('/') : url.split('/').slice(1).join('/')
-  const versionSuffix = version ? `@${version}` : ''
-  
-  return `${baseUrl}/${packageName}${versionSuffix}${subPath ? `/${subPath}` : ''}`
 }
 
 export async function fetchRemoteComponent(url: string, baseDir?: string): Promise<string> {
-  // Handle local file imports
-  if (baseDir && (url.startsWith('./') || url.startsWith('../'))) {
-    // Try each extension until we find a matching file
-    for (const ext of FILE_EXTENSIONS) {
-      const filePath = path.join(baseDir, url + ext)
-      try {
-        const stats = await fs.stat(filePath)
-        if (stats.isFile()) {
-          return await fs.readFile(filePath, 'utf-8')
+  try {
+    // Handle local file imports
+    if (baseDir && (url.startsWith('./') || url.startsWith('../'))) {
+      // Try each extension until we find a matching file
+      for (const ext of FILE_EXTENSIONS) {
+        const filePath = path.join(baseDir, url + ext)
+        try {
+          const stats = await fs.stat(filePath)
+          if (stats.isFile()) {
+            return await fs.readFile(filePath, 'utf-8')
+          }
+        } catch {
+          continue // File doesn't exist with this extension, try next
         }
-      } catch {
-        continue // File doesn't exist with this extension, try next
+      }
+      throw new Error(`Local component not found: ${url} in ${baseDir}`)
+    }
+
+    // Validate URL domain for remote components
+    if (url.startsWith('http')) {
+      const urlObj = new URL(url)
+      if (!ALLOWED_DOMAINS.some(domain => urlObj.hostname === domain)) {
+        throw new Error(`Domain ${urlObj.hostname} not allowed for remote imports`)
       }
     }
-    throw new Error(`Local component not found: ${url} in ${baseDir}`)
-  }
 
-  // Handle remote components
-  await fs.mkdir(CACHE_DIR, { recursive: true })
+    // Handle remote components with caching
+    await fs.mkdir(CACHE_DIR, { recursive: true })
 
-  // Generate cache key from URL
-  const cacheKey = createHash('sha256').update(url).digest('hex')
-  const cachePath = path.join(CACHE_DIR, `${cacheKey}.js`)
+    // Generate cache key from URL
+    const cacheKey = createHash('sha256').update(url).digest('hex')
+    const cachePath = path.join(CACHE_DIR, `${cacheKey}.js`)
 
-  try {
-    // Check cache first
-    const stats = await fs.stat(cachePath)
-    const cacheAge = Date.now() - stats.mtimeMs
+    try {
+      // Check cache first
+      const stats = await fs.stat(cachePath)
+      const cacheAge = Date.now() - stats.mtimeMs
 
-    // Cache is valid for 24 hours
-    if (cacheAge < 24 * 60 * 60 * 1000) {
-      return await fs.readFile(cachePath, 'utf-8')
+      // Cache is valid for 24 hours
+      if (cacheAge < 24 * 60 * 60 * 1000) {
+        return await fs.readFile(cachePath, 'utf-8')
+      }
+    } catch {
+      // Cache miss or error, proceed with fetch
     }
-  } catch {
-    // Cache miss or error, proceed with fetch
+
+    // Convert package name to esm.sh URL if needed
+    const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}`
+
+    // Try resolving through next-mdxld first
+    const result = await resolveRemoteImport({ url: resolvedUrl })
+    if (result?.components || result?.layout) {
+      // Component or layout found through next-mdxld
+      return JSON.stringify(result)
+    }
+
+    // Fallback to direct fetch if not found through next-mdxld
+    const response = await fetch(resolvedUrl)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch component from ${resolvedUrl}: ${response.statusText}`)
+    }
+
+    const content = await response.text()
+
+
+    // Cache the content
+    await fs.writeFile(cachePath, content, 'utf-8')
+
+    return content
+  } catch (error) {
+    console.error('Failed to fetch remote component:', error)
+    throw error
   }
-
-  // Fetch remote component
-  const response = await globalThis.fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch remote component: ${url}`)
-  }
-
-  const content = await response.text()
-
-  // Cache the content
-  await fs.writeFile(cachePath, content, 'utf-8')
-
-  return content
 }
