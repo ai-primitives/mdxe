@@ -158,25 +158,31 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   };
   
   const remoteImports = await resolveRemoteImport(remoteOptions);
-  const typedImports = remoteImports as RemoteImportResult;
+  const typedImports = remoteImports as RemoteImportResult | null;
   
   // Handle layout resolution with proper null checks
-  if (typedImports?.layout) {
+  if (typedImports && typedImports.layout && typeof typedImports.layout === 'string') {
     mdxLayout = typedImports.layout;
-    const layoutStr = typedImports.layoutString || 'undefined';
-    processedCode = `export const layout = ${layoutStr}\n${processedCode}`;
+    processedCode = `export { default as layout } from '${typedImports.layout}'\n${processedCode}`;
   } else if (options.layout) {
     // Fallback to options.layout if remote import failed
     console.warn('Layout import failed, using fallback layout');
     processedCode = `export const layout = undefined\n${processedCode}`;
+  } else {
+    // Always ensure layout export exists
+    processedCode = `export const layout = undefined\n${processedCode}`;
   }
+
   // Handle component resolution with proper null checks
-  if (typedImports?.components) {
+  if (typedImports && typedImports.components) {
     mdxComponents = typedImports.components;
-    const componentStrs = typedImports.componentStrings || {};
-    processedCode = `export const components = {\n${Object.entries(componentStrs)
-      .map(([name, str]) => `  ${name}: ${str}`)
-      .join(',\n')}\n}\n${processedCode}`;
+    Object.entries(typedImports.components).forEach(([name, component]) => {
+      if (typeof component === 'string') {
+        processedCode = `export { default as ${name} } from '${component}'\n${processedCode}`;
+      } else {
+        console.warn(`Skipping component ${name}: invalid import URL`);
+      }
+    });
   }
 
   // Combine exports with content
