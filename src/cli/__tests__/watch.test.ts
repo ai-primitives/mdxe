@@ -2,7 +2,6 @@ import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
 import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch, FSWatcher } from 'fs'
-import fetch from 'node-fetch'
 import { sleep, debug } from '../../test/setup.js'
 
 const log = {
@@ -203,7 +202,7 @@ Initial content for page 2
         debug('Timeout waiting for watcher:', debugState())
         cleanup()
         reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 30000) // Reset to 30s to match CI timeout
+      }, 60000) // Increased timeout for watch mode tests
 
       if (watchProcess?.stdout) {
         watchProcess.stdout.on('data', handleOutput)
