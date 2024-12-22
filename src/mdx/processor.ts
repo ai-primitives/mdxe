@@ -2,6 +2,7 @@ import { resolveRemoteImport, fetchRemoteComponent } from './remote.js'
 import type { RemoteImportOptions, RemoteImportResult } from '../types/remote.d.ts'
 import remarkMdxld from 'remark-mdxld'
 import remarkGfm from 'remark-gfm'
+import remarkFrontmatter from 'remark-frontmatter'
 import { compile } from '@mdx-js/mdx'
 import type { ComponentType } from 'react'
 import type { Root, YAML } from 'mdast'
@@ -76,6 +77,8 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   // Process MDX content with enhanced remark plugins for full MDX-LD support
   const result = await compile(content, {
     remarkPlugins: [
+      // Enable frontmatter parsing
+      [remarkFrontmatter, ['yaml']],
       // Enable GitHub Flavored Markdown features
       [remarkGfm, {
         tables: true,
@@ -83,15 +86,22 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
         strikethrough: true,
         autolink: true
       }],
+      // Debug plugin to log YAML content before mdxld
+      () => (tree: Root, file: VFile) => {
+        const yamlNode = tree.children.find((node): node is YAML => node.type === 'yaml')
+        console.log('Debug: YAML content before mdxld:', yamlNode?.value)
+        console.log('Debug: YAML node type before mdxld:', yamlNode?.type)
+        console.log('Debug: File data before mdxld:', JSON.stringify(file.data, null, 2))
+        return tree
+      },
       // Use default remark-mdxld configuration to match next-mdxld
       remarkMdxld,
-      // Debug plugin to log YAML content after mdxld processing
+      // Debug plugin to log YAML content after mdxld
       () => (tree: Root, file: VFile) => {
         const yamlNode = tree.children.find((node): node is YAML => node.type === 'yaml')
         console.log('Debug: YAML content after mdxld:', yamlNode?.value)
         console.log('Debug: YAML node type after mdxld:', yamlNode?.type)
         console.log('Debug: File data after mdxld:', JSON.stringify(file.data, null, 2))
-        console.log('Debug: Full tree after mdxld:', JSON.stringify(tree, null, 2))
         return tree
       }
     ],

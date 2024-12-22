@@ -134,12 +134,20 @@ The following issues are currently blocking CI builds in PR #17:
      - next-mdxld: Needs documentation update for required fields
 
 2. Watch Mode Test Failures:
-   - Error: "fileWatcher is not defined"
    - Error: "Timeout waiting for watcher to be ready"
-   - Impact: Test failures in watch.test.ts
+   - Location: watch.test.ts:302:16 and watch.test.ts:504:16
+   - Impact: Test failures in PR #17
    - Affected Tests:
      - "should detect changes in single file mode"
      - "should detect changes in directory mode"
+   - Root Cause Analysis:
+     - Race conditions in watcher initialization
+     - Default timeout (30s) insufficient for CI environment
+     - Environment differences between local and CI
+   - Required Actions:
+     - [ ] Increase test timeout in vitest.config.ts
+     - [ ] Add proper watcher initialization checks
+     - [ ] Implement retry mechanism for flaky tests
 
 3. Type Definition Issues:
    - File: `src/mdx/processor.ts`
