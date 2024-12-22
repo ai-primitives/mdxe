@@ -4,6 +4,7 @@ import { resolve, extname, dirname } from 'path'
 import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
 import { spawn, type ChildProcess } from 'child_process'
+import { fileURLToPath } from 'url'
 import type { MDXEConfig } from './config.js'
 
 // Use console.debug for logging
@@ -17,12 +18,10 @@ const log = {
   cli: createLogger('CLI')
 }
 
-// Import package.json with type assertion for ESM compatibility
-const pkg = {
-  default: {
-    version: process.env.npm_package_version || '0.0.0'
-  }
-}
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const pkgPath = resolve(__dirname, '../../package.json')
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
 
 const explorer = cosmiconfig('mdxe')
 
@@ -105,7 +104,11 @@ function startNextDev(config: MDXEConfig) {
   return nextProcess
 }
 
-export function parseArgs(args: string[]): { options: CliOptions; remainingArgs: string[] } {
+// Export all CLI functions at the top
+export { parseArgs, showHelp, showVersion, cli };
+
+// Remove individual export statements and declare functions
+function parseArgs(args: string[]): { options: CliOptions; remainingArgs: string[] } {
   const options: CliOptions = {
     version: false,
     help: false
@@ -150,7 +153,7 @@ export function parseArgs(args: string[]): { options: CliOptions; remainingArgs:
   return { options, remainingArgs }
 }
 
-export function showHelp(): void {
+function showHelp(): void {
   console.log(`
 Usage: mdxe [options] <file|directory>
 
@@ -164,11 +167,11 @@ Configuration:
 `)
 }
 
-export function showVersion(): void {
-  console.log(`v${pkg.default.version}`)
+function showVersion(): void {
+  console.log(`v${pkg.version}`)
 }
 
-export async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
+async function cli(args: string[] = process.argv.slice(2)): Promise<void> {
   const { options, remainingArgs } = parseArgs(args)
   const config = await loadConfig()
 
