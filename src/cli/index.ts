@@ -3,12 +3,12 @@ import { watch } from 'chokidar'
 import { resolve, extname, dirname } from 'path'
 import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
-import { spawn, type ChildProcess } from 'child_process'
+// Removed Next.js related imports
 import type { MDXEConfig } from './config.js'
 
 // Use console.debug for logging
 function createLogger(prefix: string) {
-  return (msg: string, ...args: any[]) => console.debug(`[${prefix}] ${msg}`, ...args)
+  return (msg: string, ...args: unknown[]) => console.debug(`[${prefix}] ${msg}`, ...args)
 }
 
 const log = {
@@ -89,21 +89,7 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
   }
 }
 
-function startNextDev(config: MDXEConfig) {
-  const dir = config.next?.dir || '.'
-  const nextProcess = spawn('next', ['dev', dir], {
-    stdio: 'inherit',
-    shell: true,
-  })
-
-  nextProcess.on('error', (error) => {
-    const errorMessage = formatError(error)
-    console.error('Failed to start Next.js dev server:', errorMessage)
-    process.exit(1)
-  })
-
-  return nextProcess
-}
+// Removed Next.js dev server function
 
 export function parseArgs(args: string[]): { options: CliOptions; remainingArgs: string[] } {
   const options: CliOptions = {
@@ -199,11 +185,10 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
   }
 
   const isDirectory = existsSync(filepath) && statSync(filepath).isDirectory()
-
-  // Start Next.js dev server if configured
-  let nextProcess: ChildProcess | undefined
-  if (config.next?.dev) {
-    nextProcess = startNextDev(config)
+  if (isDirectory) {
+    log.cli('Processing directory:', filepath)
+  } else {
+    log.cli('Processing file:', filepath)
   }
 
   // Handle watch mode
@@ -381,15 +366,9 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     // Handle cleanup
     process.on('SIGINT', () => {
       watcher.close()
-      if (nextProcess) {
-        nextProcess.kill()
-      }
       process.exit(0)
     })
   } else {
     await processMDXFile(target, config)
-    if (nextProcess) {
-      nextProcess.kill()
-    }
   }
 }

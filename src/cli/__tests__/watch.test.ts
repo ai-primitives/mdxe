@@ -1,14 +1,14 @@
 import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, openSync, readFileSync, existsSync, statSync, fsyncSync, closeSync, watch, FSWatcher } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch, FSWatcher } from 'fs'
 import fetch from 'node-fetch'
 import { sleep, debug } from '../../test/setup.js'
 
 const log = {
-  test: (msg: string, ...args: any[]) => debug(`[TEST] ${msg}`, ...args),
-  fs: (msg: string, ...args: any[]) => debug(`[FS] ${msg}`, ...args),
-  proc: (msg: string, ...args: any[]) => debug(`[PROC] ${msg}`, ...args)
+  test: (msg: string, ...args: unknown[]) => debug(`[TEST] ${msg}`, ...args),
+  fs: (msg: string, ...args: unknown[]) => debug(`[FS] ${msg}`, ...args),
+  proc: (msg: string, ...args: unknown[]) => debug(`[PROC] ${msg}`, ...args)
 }
 
 describe('Watch Mode', () => {
@@ -44,13 +44,7 @@ Initial content for page 2
     `,
     )
 
-    writeFileSync(
-      join(testDir, 'next.config.js'),
-      `
-const { withMDXE } = require('../../dist')
-module.exports = withMDXE({})
-    `,
-    )
+    // Next.js config file creation removed - now handled by next-mdxld
   })
 
   afterEach(async () => {
@@ -543,8 +537,8 @@ Testing next dev integration
           debug('Next.js server started successfully after', Date.now() - serverStartTime, 'ms')
           break
         }
-      } catch (error) {
-        debug('Server not ready yet, waiting...', Date.now() - serverStartTime, 'ms elapsed')
+      } catch (err) {
+        debug('Server not ready yet:', err, Date.now() - serverStartTime, 'ms elapsed')
         await sleep(1000)
       }
     }

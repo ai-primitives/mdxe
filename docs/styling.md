@@ -18,38 +18,7 @@ This content will automatically receive Tailwind Typography styling.
 
 ## Next.js Integration
 
-### App Directory Setup
-
-Create a new Next.js app with mdxe:
-
-```bash
-pnpm create next-app my-mdx-app
-cd my-mdx-app
-pnpm add mdxe
-```
-
-Configure Next.js (`next.config.js`):
-
-```javascript
-const withMDXE = require('mdxe').withMDXE
-
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
-  experimental: {
-    appDir: true
-  },
-  mdxe: {
-    styleOverrides: true,
-    customComponents: {
-      // Optional: Map custom components
-      Button: './components/Button'
-    }
-  }
-}
-
-module.exports = withMDXE(nextConfig)
-```
+For Next.js integration, please use [next-mdxld](https://github.com/ai-primitives/next-mdxld).
 
 ### Style Configuration
 
@@ -207,12 +176,7 @@ Enable dark mode support:
 
 ### Common Issues
 
-1. **Styles Not Applied in Next.js App Directory**
-   - Ensure `styleOverrides: true` in next.config.js
-   - Import CSS file in root layout.tsx
-   - Clear .next directory and rebuild
-
-2. **Custom Components Not Loading**
+1. **Custom Components Not Loading**
    - Verify component paths in mdxe config
    - Check component export/import syntax
    - Ensure components are in correct directory

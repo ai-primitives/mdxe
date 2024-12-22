@@ -10,15 +10,6 @@
   - [ ] Remote component imports
   - [ ] Frontmatter metadata extraction
 
-- [ ] NextJS Integration
-
-  - [ ] Plugin mode implementation
-  - [ ] Standalone CLI mode
-  - [ ] App Router metadata support
-  - [ ] Development server (next dev)
-  - [ ] Production build (next build)
-  - [ ] Production server (next start)
-
 - [ ] CLI Implementation
 
   - [ ] File processing
@@ -75,12 +66,7 @@ The following lint issues exist in the codebase but are unrelated to recent chan
    - `src/cli/__tests__/watch.test.ts`: 'vi' is defined but never used
    - `src/next/__tests__/plugin.test.ts`: 'mdxContent' is assigned but never used
 
-2. Type Definition Issues in `src/types/next.ts`:
-
-   - Unused types: 'NextConfig', 'WebpackConfig'
-   - Multiple instances of 'any' type usage requiring specification
-
-3. Test Setup Issues in `src/test/setup.ts`:
+2. Test Setup Issues in `src/test/setup.ts`:
    - Unused 'fs' import
    - Undefined 'setTimeout'
    - 'any' type usage requiring specification
@@ -101,13 +87,7 @@ The following test failures exist in the codebase but are unrelated to recent ch
    - `src/cli/__tests__/watch.test.ts`: Test timeouts in file change detection
    - Issue appears to be related to test environment setup, not watch functionality
 
-2. Next.js Build Failures:
-
-   - `src/next/__tests__/plugin.test.ts`: Build command failures in plugin tests
-   - Errors suggest environment setup issues, not plugin functionality
-
-3. Server Response Issues:
-   - `src/next/__tests__/server.test.ts`: Server response checks failing
+2. Server Response Issues:
    - Local test server not responding as expected, likely environment-related
 
 To reproduce:
