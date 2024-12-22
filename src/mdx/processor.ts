@@ -3,6 +3,7 @@ import type { RemoteImportOptions, RemoteImportResult } from '../types/remote.d.
 import remarkMdxld from 'remark-mdxld'
 import remarkGfm from 'remark-gfm'
 import { compile } from '@mdx-js/mdx'
+import type { ComponentType } from 'react'
 
 export interface MDXProcessorOptions {
   filepath: string;
@@ -37,8 +38,8 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   let componentExports = '';
   let yamlld = {};
   let frontmatter: Record<string, unknown> = {};
-  let mdxComponents: Record<string, string> = {};
-  let mdxLayout: string | undefined;
+  let mdxComponents: Record<string, ComponentType> = {};
+  let mdxLayout: ComponentType | undefined;
 
   // Process remote components and generate ESM-compatible exports
   if (options.components) {
@@ -140,11 +141,15 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   
   if (typedImports.layout) {
     mdxLayout = typedImports.layout;
-    processedCode = `export const layout = ${JSON.stringify(mdxLayout)}\n${processedCode}`;
+    const layoutStr = typedImports.layoutString || 'undefined';
+    processedCode = `export const layout = ${layoutStr}\n${processedCode}`;
   }
   if (typedImports.components) {
     mdxComponents = typedImports.components;
-    processedCode = `export const components = ${JSON.stringify(mdxComponents)}\n${processedCode}`;
+    const componentStrs = typedImports.componentStrings || {};
+    processedCode = `export const components = {\n${Object.entries(componentStrs)
+      .map(([name, str]) => `  ${name}: ${str}`)
+      .join(',\n')}\n}\n${processedCode}`;
   }
 
   // Combine exports with content

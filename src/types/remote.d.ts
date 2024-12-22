@@ -8,8 +8,10 @@ export interface RemoteImportOptions extends Partial<ComponentResolutionOptions>
 }
 
 export interface RemoteImportResult {
-  layout?: string;
+  layout?: ComponentType;
   components?: Record<string, ComponentType>;
+  layoutString?: string;
+  componentStrings?: Record<string, string>;
 }
 
 // Re-export next-mdxld types for convenience
