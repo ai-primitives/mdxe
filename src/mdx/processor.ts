@@ -36,7 +36,10 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   const { content = '', context, type } = options;
   let processedCode = content;
   let componentExports = '';
-  let yamlld = {};
+  let yamlld: ProcessedMDX['yamlld'] = {
+    $type: undefined,
+    $context: undefined
+  };
   let frontmatter: Record<string, unknown> = {};
   let mdxComponents: Record<string, ComponentType> = {};
   let mdxLayout: ComponentType | undefined;
@@ -123,17 +126,19 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   const rawYamlld = mdxldData.yamlld || {};
 
   // Filter yamlld to only include $type and $context
-  yamlld = {
-    $type: rawYamlld.$type,
-    $context: rawYamlld.$context
-  };
+  if (rawYamlld.$type) yamlld.$type = rawYamlld.$type;
+  if (rawYamlld.$context) yamlld.$context = rawYamlld.$context;
 
   // Process structured data and executable code blocks
   if (mdxldData.structured) {
     const structuredData = mdxldData.structured as ProcessedMDX['yamlld'];
     // Only include $type and $context from structured data if they exist
-    if ('$type' in structuredData) yamlld.$type = structuredData.$type;
-    if ('$context' in structuredData) yamlld.$context = structuredData.$context;
+    if (structuredData?.$type) {
+      yamlld.$type = structuredData.$type;
+    }
+    if (structuredData?.$context) {
+      yamlld.$context = structuredData.$context;
+    }
   }
   if (mdxldData.executable) {
     componentExports += Object.entries(mdxldData.executable)

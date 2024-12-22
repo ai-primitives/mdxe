@@ -98,24 +98,31 @@ These test failures are pre-existing infrastructure issues and do not indicate p
 
 ### TypeScript Type Definition Issues
 
-The following TypeScript errors have been identified and fixed:
+The following TypeScript errors are currently blocking CI builds:
 
 1. YAML-LD Property Type Definitions:
-   - File: `src/mdx/processor.ts`
-   - Issues:
+   - File: `src/mdx/processor.ts` (lines 133-134)
+   - Active Issues:
      - Property '$type' does not exist on type '{}'
      - Property '$context' does not exist on type '{}'
-   - Resolution:
-     - Added proper type definitions for YAML-LD data structures
-     - Using ProcessedMDX['yamlld'] type for structured data
-     - Ensuring consistent typing across the codebase
-   - Using $ prefix as per W3C YAML-LD specification
+   - Current Status:
+     - Type definitions added but not properly recognized
+     - ProcessedMDX['yamlld'] type not correctly narrowing
+     - Using $ prefix as per W3C YAML-LD specification
+   - Cross-Repository Impact:
+     - mdxe: Blocking CI builds in PR #17
+     - next-mdxld: May require type definition updates
 
 To reproduce:
 1. Run `pnpm install`
 2. Run `pnpm build`
+3. TypeScript errors occur in processor.ts:
+   ```typescript
+   if ('$type' in structuredData) yamlld.$type = structuredData.$type;
+   if ('$context' in structuredData) yamlld.$context = structuredData.$context;
+   ```
 
-These issues have been resolved by properly typing the structured data variables and ensuring consistent type usage throughout the codebase.
+Investigation ongoing to resolve type recognition issues between mdxe and next-mdxld packages.
 
 ### Environment Version Differences
 
