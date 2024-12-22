@@ -1,5 +1,5 @@
 import type { NextConfig } from 'next'
-import type { Configuration as WebpackConfig } from 'webpack'
+import type { Configuration as WebpackConfig, RuleSetRule, RuleSetUseItem } from 'webpack'
 import type { WebpackConfigContext } from '../types/next.js'
 import { processMDX } from '../mdx/processor.js'
 import type { ProcessedMDX } from '../mdx/processor.js'
@@ -43,50 +43,73 @@ interface MDXNextConfig {
 }
 
 export function withMDXE(nextConfig: NextConfig = {}, pluginOptions: MDXEPluginOptions = {}) {
-  // Import @next/mdx dynamically since it's a peer dependency
-  let withMDX: (config?: MDXNextConfig) => (config: NextConfig) => NextConfig
-  try {
-    withMDX = require('@next/mdx')
-  } catch (e) {
-    console.warn('Warning: @next/mdx is not installed. Please install it as a dependency.')
-    withMDX = () => (config: NextConfig) => config
-  }
+  // Configure webpack for MDX processing
+  const webpack = (config: WebpackConfig, { dev, isServer }: WebpackConfigContext): WebpackConfig => {
+    // Add MDX file handling
+    if (!config.module) config.module = { rules: [] }
+    if (!config.module.rules) config.module.rules = []
 
-  // Extract existing remark plugins
-  const existingRemarkPlugins = Array.isArray(pluginOptions.mdx?.remarkPlugins)
-    ? pluginOptions.mdx.remarkPlugins
-    : []
+    // Find and modify the existing MDX rule if it exists
+    const mdxRuleIndex = config.module.rules.findIndex(
+      (rule): rule is RuleSetRule => {
+        if (!rule || typeof rule !== 'object') return false
+        const ruleObj = rule as RuleSetRule
+        return !!(ruleObj.test instanceof RegExp && ruleObj.test.test('.mdx'))
+      }
+    )
 
-  // Prepare MDX options for @next/mdx
-  const mdxConfig: MDXNextConfig = {
-    extension: /\.mdx?$/,
-    options: {
-      jsx: true,
-      ...pluginOptions.mdx,
-      // Custom remark plugins for frontmatter handling
-      remarkPlugins: [
-        // Extract frontmatter metadata for App Router
-        () => (tree: unknown, file: { data: { meta?: Record<string, unknown>; metadata?: Record<string, unknown> } }) => {
-          const { metadata } = file.data
-          if (metadata) {
-            // Convert metadata to App Router format
-            const { title, description, keywords, ...rest } = metadata as {
-              title?: string
-              description?: string
-              keywords?: string | string[]
-              [key: string]: unknown
+    const mdxLoader = {
+      loader: '@mdx-js/loader',
+      options: {
+        jsx: true,
+        ...pluginOptions.mdx,
+        remarkPlugins: [
+          // Extract frontmatter metadata for App Router
+          () => (tree: unknown, file: { data: { meta?: Record<string, unknown>; metadata?: Record<string, unknown> } }) => {
+            const { metadata } = file.data
+            if (metadata) {
+              // Convert metadata to App Router format
+              const { title, description, keywords, ...rest } = metadata as {
+                title?: string
+                description?: string
+                keywords?: string | string[]
+                [key: string]: unknown
+              }
+              file.data.meta = {
+                ...(title ? { title } : {}),
+                ...(description ? { description } : {}),
+                ...(keywords ? { keywords: Array.isArray(keywords) ? keywords : [keywords] } : {}),
+                ...rest,
+              }
             }
-            file.data.meta = {
-              ...(title ? { title } : {}),
-              ...(description ? { description } : {}),
-              ...(keywords ? { keywords: Array.isArray(keywords) ? keywords : [keywords] } : {}),
-              ...rest,
-            }
-          }
-        },
-        ...existingRemarkPlugins,
-      ],
-    },
+          },
+          ...(Array.isArray(pluginOptions.mdx?.remarkPlugins) ? pluginOptions.mdx.remarkPlugins : []),
+        ],
+        rehypePlugins: Array.isArray(pluginOptions.mdx?.rehypePlugins) ? pluginOptions.mdx.rehypePlugins : [],
+      },
+    }
+
+    if (mdxRuleIndex !== -1) {
+      // Modify existing rule
+      const existingRule = config.module.rules[mdxRuleIndex] as RuleSetRule
+      const currentUse = existingRule.use as RuleSetUseItem | RuleSetUseItem[] | undefined
+      if (!currentUse) {
+        existingRule.use = [mdxLoader]
+      } else if (Array.isArray(currentUse)) {
+        currentUse.unshift(mdxLoader)
+      } else {
+        // Convert any non-array use to an array of loaders
+        existingRule.use = [mdxLoader, currentUse].filter(Boolean) as RuleSetUseItem[]
+      }
+    } else {
+      // Add new rule
+      config.module.rules.unshift({
+        test: /\.mdx?$/,
+        use: [mdxLoader],
+      })
+    }
+
+    return config
   }
 
   // Ensure experimental options are properly configured
@@ -97,14 +120,12 @@ export function withMDXE(nextConfig: NextConfig = {}, pluginOptions: MDXEPluginO
   }
 
   // Combine configurations
-  const combinedConfig = {
+  return {
     ...nextConfig,
     experimental,
     pageExtensions: [...(nextConfig.pageExtensions || ['tsx', 'ts', 'jsx', 'js']), 'mdx', 'md'],
+    webpack,
   }
-
-  // Apply @next/mdx configuration
-  return withMDX(mdxConfig)(combinedConfig)
 }
 
 /**

@@ -112,27 +112,23 @@ This page demonstrates style customization and component imports.
 
       debug('Creating Next.js configuration...')
       const nextConfig = `
-        import createMDXPlugin from '@next/mdx'
         import { withMDXE } from '${process.cwd()}/dist/index.js'
 
         /** @type {import('next').NextConfig} */
-        const baseConfig = {
+        const nextConfig = {
           pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
           experimental: {
-            webpackBuildWorker: true
+            webpackBuildWorker: true,
+            mdxRs: true
           }
         }
 
-        const withMDX = createMDXPlugin({
-          options: {
+        export default withMDXE(nextConfig, {
+          mdx: {
             remarkPlugins: [],
             rehypePlugins: []
           }
         })
-
-        const nextConfig = withMDX(baseConfig)
-
-        export default nextConfig
       `
       fs.writeFileSync(path.join(testDir, 'next.config.js'), nextConfig)
 
@@ -152,7 +148,7 @@ This page demonstrates style customization and component imports.
           'react-dom': '^18.2.0',
           '@types/react': '^18.2.0',
           '@types/react-dom': '^18.2.0',
-          '@next/mdx': '^14.0.0',
+          '@mdx-js/loader': '^3.0.0',
           '@mdx-js/react': '^3.0.0',
           '@types/mdx': '^2.0.0',
         },
@@ -219,7 +215,14 @@ export default function App({ Component, pageProps }) {
 
       debug('Running build...')
       try {
-        execSync('pnpm exec next build', { stdio: ['pipe', 'pipe', 'pipe'] })
+        execSync('NODE_ENV=production pnpm exec next build', { 
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          NEXT_TELEMETRY_DISABLED: '1'
+        }
+      })
       } catch (error) {
         if (error instanceof Error && 'stdout' in error && 'stderr' in error) {
           const execError = error as { stdout: Buffer | null; stderr: Buffer | null }

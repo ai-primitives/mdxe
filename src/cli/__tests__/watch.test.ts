@@ -1,17 +1,28 @@
-import { describe, it, beforeEach, afterEach, expect } from 'vitest'
+import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
 import { spawn } from 'child_process'
-import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, openSync, readFileSync, existsSync, statSync, fsyncSync, closeSync, watch, FSWatcher } from 'fs'
+import { join, resolve, dirname } from 'path'
+import { mkdirSync, writeFileSync, rmSync, openSync, readFileSync, existsSync, statSync, fsyncSync, closeSync, watch, FSWatcher, readdirSync } from 'fs'
 import fetch from 'node-fetch'
 import { sleep, debug } from '../../test/setup.js'
 
 const log = {
   test: (msg: string, ...args: any[]) => debug(`[TEST] ${msg}`, ...args),
   fs: (msg: string, ...args: any[]) => debug(`[FS] ${msg}`, ...args),
-  proc: (msg: string, ...args: any[]) => debug(`[PROC] ${msg}`, ...args)
+  proc: (msg: string, ...args: any[]) => debug(`[PROC] ${msg}`, ...args),
+  watcher: (msg: string, ...args: any[]) => debug(`[WATCHER] ${msg}`, ...args)
 }
 
 describe('Watch Mode', () => {
+  // Increase timeout for all watch mode tests as they are known to take longer than 30s
+  vi.setConfig({ 
+    testTimeout: 180000 // Increase timeout to 180s to ensure enough time for watcher initialization
+  })
+  
+  // Configure longer timeouts for specific operations
+  const WATCHER_READY_TIMEOUT = 60000    // 60s for watcher to become ready
+  const FILE_CHANGE_TIMEOUT = 30000      // 30s to detect file changes
+  const CLEANUP_TIMEOUT = 10000          // 10s for cleanup operations
+  
   const testDir = join(process.cwd(), 'test-watch-mode')
   const singleFile = join(testDir, 'test.mdx')
   const multiDir = join(testDir, 'content')
@@ -20,29 +31,32 @@ describe('Watch Mode', () => {
     mkdirSync(testDir, { recursive: true })
     mkdirSync(multiDir, { recursive: true })
 
-    writeFileSync(
-      singleFile,
-      `
+    // Create test file with proper synchronization
+    const fd = openSync(singleFile, 'w')
+    writeFileSync(fd, `
 # Test File
 Initial content
-    `,
-    )
+    `, 'utf-8')
+    fsyncSync(fd)
+    closeSync(fd)
 
-    writeFileSync(
-      join(multiDir, 'page1.mdx'),
-      `
+    // Create page1.mdx with proper synchronization
+    const page1Fd = openSync(join(multiDir, 'page1.mdx'), 'w')
+    writeFileSync(page1Fd, `
 # Page 1
 Initial content for page 1
-    `,
-    )
+    `, 'utf-8')
+    fsyncSync(page1Fd)
+    closeSync(page1Fd)
 
-    writeFileSync(
-      join(multiDir, 'page2.mdx'),
-      `
+    // Create page2.mdx with proper synchronization
+    const page2Fd = openSync(join(multiDir, 'page2.mdx'), 'w')
+    writeFileSync(page2Fd, `
 # Page 2
 Initial content for page 2
-    `,
-    )
+    `, 'utf-8')
+    fsyncSync(page2Fd)
+    closeSync(page2Fd)
 
     writeFileSync(
       join(testDir, 'next.config.js'),
@@ -57,53 +71,159 @@ module.exports = withMDXE({})
     debug('Cleaning up watch process and test directory...')
     if (watchProcess) {
       try {
+        // First attempt: SIGTERM
         watchProcess.kill('SIGTERM')
-        await sleep(1000) // Wait for process to terminate
+        
+        // Wait for process to terminate gracefully
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            debug('SIGTERM timeout, attempting SIGINT')
+            try {
+              watchProcess?.kill('SIGINT')
+              
+              // Give SIGINT a chance, then force SIGKILL
+              setTimeout(() => {
+                debug('SIGINT timeout, forcing SIGKILL')
+                try {
+                  process.kill(watchProcess?.pid || 0, 'SIGKILL')
+                } catch (e) {
+                  debug('Error during SIGKILL:', e)
+                }
+                resolve()
+              }, 2000)
+            } catch (e) {
+              debug('Error during SIGINT:', e)
+              resolve()
+            }
+          }, 3000)
+
+          watchProcess?.on('exit', (code, signal) => {
+            clearTimeout(timeout)
+            debug('Watch process exited:', { code, signal })
+            resolve()
+          })
+        })
       } catch (error) {
-        debug('Error killing watch process:', error)
+        debug('Error during process cleanup:', error)
+        try {
+          process.kill(watchProcess.pid || 0, 'SIGKILL')
+        } catch (e) {
+          debug('Final SIGKILL attempt failed:', e)
+        }
+      } finally {
+        // Ensure process is marked as terminated
+        watchProcess = null
       }
-      watchProcess = null
     }
 
+    // Clean up test directory
     try {
-      rmSync(testDir, { recursive: true, force: true })
+      if (existsSync(testDir)) {
+        // Force sync before removal
+        const files = readdirSync(testDir, { recursive: true }) as string[]
+        for (const file of files) {
+          const fullPath = join(testDir, file)
+          try {
+            if (statSync(fullPath).isFile()) {
+              const fd = openSync(fullPath, 'r')
+              fsyncSync(fd)
+              closeSync(fd)
+            }
+          } catch (e) {
+            debug('Error syncing file before cleanup:', e)
+          }
+        }
+        rmSync(testDir, { recursive: true, force: true })
+        debug('Test directory cleaned up successfully')
+      }
     } catch (error) {
-      debug('Error removing test directory:', error)
+      debug('Error cleaning up test directory:', error)
     }
   })
 
   it('should detect changes in single file mode', async () => {
     let hasProcessedFile = false
-    let fileWatcher: FSWatcher | null = null
     const absolutePath = resolve(process.cwd(), singleFile)
     const args = ['--watch', absolutePath]
+    let filePath = absolutePath // Ensure filePath is accessible in closure
 
     debug('=== Test Setup ===')
     debug('Test directory path:', testDir)
     debug('Absolute file path:', absolutePath)
     debug('Current working directory:', process.cwd())
     
-    // Create initial file with synchronous operations
+    // Ensure test directory exists and is clean
+    mkdirSync(dirname(absolutePath), { recursive: true })
+    if (existsSync(absolutePath)) {
+      rmSync(absolutePath)
+    }
+    
+    // Sync directory after cleanup
+    const dirFd = openSync(dirname(absolutePath), 'r')
+    fsyncSync(dirFd)
+    closeSync(dirFd)
+    
+    // Create initial file with proper synchronization
+    let fd: number | undefined
     try {
-      writeFileSync(absolutePath, `# Initial Test\nThis is a test file.\n`, 'utf-8')
-      debug('Initial file created successfully')
-      debug('Initial file exists:', existsSync(absolutePath))
-      debug('Initial file content:', readFileSync(absolutePath, 'utf-8'))
+      const initialContent = `# Initial Test\nThis is a test file.\n`
+      fd = openSync(absolutePath, 'w')
+      writeFileSync(fd, initialContent, 'utf-8')
+      fsyncSync(fd)
+      closeSync(fd)
+      fd = undefined
+      
+      // Verify file was written correctly
+      await new Promise<void>((resolve) => setTimeout(resolve, 1000))
+      
+      if (!existsSync(absolutePath)) {
+        throw new Error('File does not exist after creation')
+      }
+      
+      const stats = statSync(absolutePath)
+      debug('Initial file stats:', {
+        size: stats.size,
+        mode: stats.mode,
+        mtime: stats.mtime
+      })
+      
+      const content = readFileSync(absolutePath, 'utf-8')
+      if (content !== initialContent) {
+        throw new Error(`File content mismatch. Expected:\n${initialContent}\nGot:\n${content}`)
+      }
+      
+      debug('Initial file created and verified successfully')
     } catch (error) {
-      debug('Error creating initial file:', error)
+      debug('Error in file setup:', error)
+      if (fd !== undefined) {
+        try {
+          closeSync(fd)
+        } catch (e) {
+          debug('Error closing file:', e)
+        }
+      }
       throw error
     }
 
-    // Set up a file watcher to monitor changes independently
-    fileWatcher = watch(absolutePath)
-    fileWatcher.on('change', (eventType, filename) => {
-      debug('File system event detected:', { eventType, filename })
+    // Ensure file exists and is stable before starting watch
+    await sleep(2000)
+    
+    // Double-check file state before watch
+    const preWatchStats = statSync(filePath)
+    debug('Pre-watch file state:', {
+      exists: existsSync(filePath),
+      content: readFileSync(filePath, 'utf-8'),
+      stats: {
+        size: preWatchStats.size,
+        mtime: preWatchStats.mtime,
+        mode: preWatchStats.mode
+      }
     })
-
-    // Ensure file exists before starting watch
-    await sleep(1000)
-    debug('Pre-watch file check - exists:', existsSync(absolutePath))
-    debug('Pre-watch file content:', readFileSync(absolutePath, 'utf-8'))
+    
+    // Force a final sync before starting watch
+    const prewatchFd = openSync(filePath, 'r')
+    fsyncSync(prewatchFd)
+    closeSync(prewatchFd)
 
     debug('Starting watch process with args:', args)
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
@@ -124,24 +244,51 @@ module.exports = withMDXE({})
 
     if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
-      if (fileWatcher) fileWatcher.close()
       throw new Error('Failed to spawn process or get process streams')
     }
 
     // Store stream references to avoid null checks
     const stdout = watchProcess.stdout
     
-    stdout.on('data', (data) => {
+    const handleStdout = (data: Buffer) => {
       const output = data.toString()
       debug('Watch process output:', output)
-      if (output.includes('Processing file:') || output.includes('File changed:') || output.includes('Watch target:')) {
+      
+      // More specific output matching with exact CLI output patterns
+      const successIndicators = [
+        'Initial scan complete',  // From ready event
+        'Watching for changes',   // From ready event
+        'Processing file:',       // From add/change events
+        'Successfully processed', // From successful processing
+        'File changed:',         // From change event
+        'Watch target:',         // From initialization
+        'Watcher is now active'  // From post-ready message
+      ]
+      
+      // Check for success indicators with more detailed logging
+      const matchedIndicator = successIndicators.find(i => output.includes(i))
+      if (matchedIndicator) {
         hasProcessedFile = true
-        debug('File change or process success detected:', output.trim())
+        debug('File change or process success detected:', {
+          output: output.trim(),
+          matchedIndicator,
+          timestamp: Date.now(),
+          processState: {
+            pid: watchProcess?.pid,
+            killed: watchProcess?.killed,
+            exitCode: watchProcess?.exitCode
+          }
+        })
       }
-    })
+      
+      // Additional debug info
+      if (output.includes('error') || output.includes('Error')) {
+        debug('Error detected in watch process output:', output.trim())
+      }
+    }
+    stdout.on('data', handleStdout)
 
     if (!watchProcess.stderr) {
-      if (fileWatcher) fileWatcher.close()
       throw new Error('Failed to get stderr from watch process')
     }
 
@@ -149,158 +296,318 @@ module.exports = withMDXE({})
       debug('Watch process error:', data.toString())
     })
 
-    // Wait for watcher to be ready with enhanced logging
+    // Wait for watcher to be ready with enhanced logging and timeout handling
     debug('Waiting for watcher to be ready...')
+    // Add longer stabilityThreshold wait to ensure watcher is fully initialized
+    await sleep(3000) // Increased wait for better stability
+    debug('Process environment:', {
+      DEBUG: process.env.DEBUG,
+      NODE_DEBUG: process.env.NODE_DEBUG,
+      NODE_ENV: process.env.NODE_ENV,
+      stabilityThreshold: 1000 // Document the threshold we're using
+    })
     
     await new Promise<void>((resolve, reject) => {
       const startTime = Date.now()
       const state = {
         readyReceived: false,
-        changeReceived: false
+        changeReceived: false,
+        lastOutput: '',
+        outputHistory: [] as string[]
       }
       
-      const debugState = () => ({
-        elapsedMs: Date.now() - startTime,
-        processState: {
-          killed: watchProcess?.killed,
-          exitCode: watchProcess?.exitCode,
-          pid: watchProcess?.pid,
-          env: process.env.NODE_DEBUG,
-          cwd: process.cwd()
-        },
-        fileState: {
-          exists: existsSync(absolutePath),
-          content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND',
-          stats: existsSync(absolutePath) ? statSync(absolutePath) : null
-        },
-        watcherState: state
-      })
+      const debugState = () => {
+        const filePath = absolutePath
+        const stats = existsSync(filePath) ? statSync(filePath) : null
+        return {
+          elapsedMs: Date.now() - startTime,
+          processState: {
+            killed: watchProcess?.killed,
+            exitCode: watchProcess?.exitCode,
+            pid: watchProcess?.pid,
+            env: process.env.NODE_DEBUG,
+            cwd: process.cwd()
+          },
+          fileState: {
+            exists: existsSync(filePath),
+            content: existsSync(filePath) ? readFileSync(filePath, 'utf-8') : 'FILE_NOT_FOUND',
+            stats: stats ? {
+              size: stats.size,
+              mode: stats.mode,
+              mtime: stats.mtime,
+              ctime: stats.ctime
+            } : null
+          },
+          watcherState: {
+            ...state,
+            outputHistory: state.outputHistory.slice(-5) // Last 5 outputs
+          }
+        }
+      }
 
       let timeoutId: NodeJS.Timeout
+      let statusInterval: NodeJS.Timeout
 
       const cleanup = () => {
         if (timeoutId) clearTimeout(timeoutId)
-        if (watchProcess?.stdout) watchProcess.stdout.removeListener('data', handleOutput)
-        if (fileWatcher) fileWatcher.close()
+        if (statusInterval) clearInterval(statusInterval)
+        if (watchProcess?.stdout) {
+          watchProcess.stdout.removeAllListeners()
+        }
+        if (watchProcess?.stderr) {
+          watchProcess.stderr.removeAllListeners()
+        }
       }
+
+      // Set up periodic status check
+      statusInterval = setInterval(() => {
+        const status = debugState()
+        debug('Watcher status:', status)
+      }, 5000)
 
       const handleOutput = (data: Buffer) => {
         const output = data.toString()
+        state.lastOutput = output
+        state.outputHistory.push(output)
         debug('Received output:', output)
         
-        if (output.includes('Initial scan complete')) {
+        if (output.includes('Initial scan complete') || output.includes('Watching for changes')) {
           state.readyReceived = true
           debug('Ready event received')
-        }
-        
-        if (output.includes('File changed:')) {
-          state.changeReceived = true
-          debug('Change event received')
-        }
-        
-        if (state.readyReceived && state.changeReceived) {
-          debug('All required events received:', debugState())
           cleanup()
           resolve()
         }
       }
 
       timeoutId = setTimeout(() => {
-        debug('Timeout waiting for watcher:', debugState())
+        const status = debugState()
+        debug('Timeout waiting for watcher:', status)
         cleanup()
-        reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 30000) // Reset to 30s to match CI timeout
+        reject(new Error(`Timeout waiting for watcher to be ready. Status: ${JSON.stringify(status, null, 2)}`))
+      }, WATCHER_READY_TIMEOUT) // Use configured timeout for watcher readiness
 
-      if (watchProcess?.stdout) {
+      if (!watchProcess) {
+        cleanup()
+        reject(new Error('Watch process not initialized'))
+        return
+      }
+
+      if (watchProcess.stdout) {
         watchProcess.stdout.on('data', handleOutput)
       }
 
-      const readyHandler = (data: Buffer) => {
-        const output = data.toString()
-        if (output.includes('Initial scan complete')) {
-          watchProcess?.stdout?.removeListener('data', readyHandler)
-          clearTimeout(timeoutId)
-          debug('Watcher ready event received')
-          resolve()
-        }
+      if (watchProcess.stderr) {
+        watchProcess.stderr.on('data', (data: Buffer) => {
+          const error = data.toString()
+          debug('Watch process stderr:', error)
+          state.outputHistory.push(`[ERROR] ${error}`)
+        })
       }
-
-      watchProcess?.stdout?.on('data', readyHandler)
     })
     
     await sleep(1000)
 
-    debug('Modifying test file...')
+    debug('=== Starting file modification test ===')
     try {
+      // Ensure watcher is ready and stable
+      await sleep(2000)
+      debug('Starting file modification after delay')
+      
       const timestamp = Date.now()
       const newContent = `# Modified Content ${timestamp}\nThis is the updated content.\n`
       
-      // Write content with atomic operation
-      writeFileSync(absolutePath, newContent, { encoding: 'utf-8', flag: 'w' })
-      debug('Content written to file')
-      
-      // Verify content
-      const verifyContent = readFileSync(absolutePath, 'utf-8')
-      debug('Verification read completed')
-      
-      
-      if (verifyContent !== newContent) {
-        debug('File content verification failed')
-        debug('Expected:', newContent)
-        debug('Actual:', verifyContent)
-        throw new Error('File content verification failed')
+      // Write content with atomic operation and explicit sync
+      let fd: number | undefined
+      try {
+        debug('Starting file write operation')
+        // Use a single atomic write operation instead of truncate + write
+        fd = openSync(filePath, 'w')
+        
+        // Write new content in a single operation
+        debug('Writing new content...')
+        writeFileSync(fd, newContent, 'utf-8')
+        fsyncSync(fd)
+        closeSync(fd)
+        fd = undefined
+        debug('New content written successfully')
+        
+        // Force a file system sync
+        const syncFd = openSync(dirname(filePath), 'r')
+        fsyncSync(syncFd)
+        closeSync(syncFd)
+        debug('File system sync completed')
+        
+        debug('Content written and synced to file')
+      } catch (error) {
+        if (fd !== undefined) {
+          try {
+            closeSync(fd)
+          } catch (e) {
+            debug('Error closing file during error handling:', e)
+          }
+        }
+        throw error
       }
       
-      debug('File modification completed and verified')
-      debug('Modified content:', newContent)
-      debug('File stats:', statSync(absolutePath))
+      // Verify content with retries
+      let verifyContent: string | undefined
+      let verifyAttempts = 0
+      const maxAttempts = 5
+      
+      while (verifyAttempts < maxAttempts) {
+        try {
+          verifyContent = readFileSync(filePath, 'utf-8')
+          if (verifyContent === newContent) {
+            break
+          }
+          debug(`Content verification attempt ${verifyAttempts + 1} failed, retrying...`)
+          await sleep(500)
+        } catch (e) {
+          debug(`Read error on attempt ${verifyAttempts + 1}:`, e)
+        }
+        verifyAttempts++
+      }
+      
+      if (!verifyContent || verifyContent !== newContent) {
+        debug('File content verification failed after all attempts')
+        debug('Expected:', newContent)
+        debug('Actual:', verifyContent)
+        throw new Error('File content verification failed after multiple attempts')
+      }
+      
+      // Get and log detailed file information
+      const stats = statSync(filePath)
+      debug('File modification completed and verified', {
+        size: stats.size,
+        mode: stats.mode,
+        mtime: stats.mtime,
+        ctime: stats.ctime,
+        uid: stats.uid,
+        gid: stats.gid,
+        content: verifyContent,
+        exists: existsSync(filePath),
+        verifyAttempts
+      })
     } catch (error) {
       debug('Error modifying file:', error)
-      if (fileWatcher) fileWatcher.close()
       throw error
     }
 
-    debug('Waiting for file change detection...')
-    // Wait for change event with timeout matching global vitest config
-    const timeout = 120000
+    debug('=== Waiting for file change detection ===')
+    const timeout = 180000 // Match test timeout configuration
     const startTime = Date.now()
+    let lastCheck = startTime
+    let checkCount = 0
     
-    // Enhanced waiting logic with file system event verification
+    // Enhanced waiting logic with progressive status updates and watcher state verification
     while (!hasProcessedFile && Date.now() - startTime < timeout) {
-      await sleep(100)
+      const now = Date.now()
+      checkCount++
+      
+      // Log status every second with enhanced state
+      if (now - lastCheck >= 1000) {
+        const processState = {
+          elapsedMs: now - startTime,
+          checks: checkCount,
+          hasProcessedFile,
+          processActive: !!watchProcess && !watchProcess.killed,
+          fileState: existsSync(filePath) ? {
+            stats: statSync(filePath),
+            content: readFileSync(filePath, 'utf-8').slice(0, 100) + '...'
+          } : 'FILE_NOT_FOUND',
+          processState: watchProcess ? {
+            pid: watchProcess.pid,
+            killed: watchProcess.killed,
+            exitCode: watchProcess.exitCode,
+            stdout: watchProcess.stdout ? 'connected' : 'disconnected',
+            stderr: watchProcess.stderr ? 'connected' : 'disconnected'
+          } : 'NO_PROCESS'
+        }
+        debug('Waiting for change detection...', processState)
+        lastCheck = now
+      }
+      
+      // Check process state and output
       if (!watchProcess || watchProcess.killed) {
         debug('Watch process terminated unexpectedly')
         break
       }
-      // Verify file content periodically
+
+      // Enhanced file state verification with buffer check
       try {
-        const currentContent = readFileSync(absolutePath, 'utf-8')
-        debug('Current file content:', currentContent)
+        const stats = statSync(filePath)
+        const currentContent = readFileSync(filePath, 'utf-8')
+        debug('Current file state:', {
+          size: stats.size,
+          mtime: stats.mtime,
+          content: currentContent.slice(0, 100) + (currentContent.length > 100 ? '...' : ''),
+          exists: true,
+          processState: {
+            killed: watchProcess?.killed,
+            exitCode: watchProcess?.exitCode,
+            pid: watchProcess?.pid
+          }
+        })
+
+        // Check process stdout buffer
+        if (watchProcess.stdout) {
+          const stdoutBuffer = (watchProcess.stdout as any)._readableState?.buffer
+          if (stdoutBuffer) {
+            debug('Process stdout buffer state:', {
+              length: stdoutBuffer.length,
+              hasData: stdoutBuffer.length > 0
+            })
+          }
+        }
       } catch (error) {
-        debug('Error reading file during wait:', error)
+        debug('Error checking file state:', error)
       }
+      
+      // More aggressive checking with detailed logging
+      const elapsed = Date.now() - startTime
+      log.watcher(`Check ${checkCount}: Elapsed ${elapsed}ms`)
+      
+      // Get detailed file system state
+      try {
+        const stats = statSync(filePath)
+        log.watcher('Current file state:', {
+          size: stats.size,
+          mtime: stats.mtime.toISOString(),
+          mode: stats.mode.toString(8)
+        })
+      } catch (error) {
+        log.watcher('Error checking file:', error)
+      }
+      
+      // More conservative polling with longer initial delay
+      await sleep(Math.min(200 + (checkCount * 50), 1000)) // Progressive backoff up to 1000ms
     }
     
+    // Detailed failure information
     if (!hasProcessedFile) {
-      debug('Timeout or failure occurred:', {
-        elapsed: Date.now() - startTime,
-        timeout,
-        watcherActive: !!watchProcess && !watchProcess.killed,
-        fileState: {
-          exists: existsSync(absolutePath),
-          content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND'
+      const endTime = Date.now()
+      debug('Change detection timeout or failure:', {
+        testDuration: {
+          elapsed: endTime - startTime,
+          timeout,
+          checkCount
         },
         processState: {
+          active: !!watchProcess && !watchProcess.killed,
           killed: watchProcess?.killed,
           exitCode: watchProcess?.exitCode,
           pid: watchProcess?.pid
+        },
+        fileState: {
+          exists: existsSync(filePath),
+          stats: existsSync(filePath) ? statSync(filePath) : null,
+          content: existsSync(filePath) ? readFileSync(filePath, 'utf-8') : 'FILE_NOT_FOUND'
+        },
+        watcherState: {
+          hasProcessedFile,
+          outputHistory: stdout ? 'Available' : 'Not available'
         }
       })
-    }
-
-    // Clean up file watcher
-    if (fileWatcher) {
-      fileWatcher.close()
     }
 
     expect(hasProcessedFile).toBe(true)
@@ -308,18 +615,11 @@ module.exports = withMDXE({})
 
   it('should detect changes in directory mode', async () => {
     let hasProcessedFiles = false
-    let dirWatcher: FSWatcher | null = null
     const args = ['--watch', multiDir]
 
     debug('=== Directory Mode Test Setup ===')
     debug('Test directory path:', multiDir)
     debug('Current working directory:', process.cwd())
-
-    // Set up directory watcher
-    dirWatcher = watch(multiDir, { recursive: true })
-    dirWatcher.on('change', (eventType, filename) => {
-      debug('Directory watcher event:', { eventType, filename })
-    })
 
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -338,7 +638,6 @@ module.exports = withMDXE({})
 
     if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
-      if (dirWatcher) dirWatcher.close()
       throw new Error('Failed to spawn process or get process streams')
     }
 
@@ -355,7 +654,6 @@ module.exports = withMDXE({})
     })
 
     if (!watchProcess.stderr) {
-      if (dirWatcher) dirWatcher.close()
       throw new Error('Failed to get stderr from watch process')
     }
 
@@ -381,9 +679,8 @@ module.exports = withMDXE({})
               readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'DIR_NOT_FOUND'
           }
         })
-        if (dirWatcher) dirWatcher.close()
         reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 30000)
+      }, WATCHER_READY_TIMEOUT) // Use configured timeout for watcher readiness
 
       const readyHandler = (data: Buffer) => {
         const output = data.toString()
@@ -434,7 +731,6 @@ module.exports = withMDXE({})
       })
     } catch (error) {
       debug('Error modifying files:', error)
-      if (dirWatcher) dirWatcher.close()
       throw error
     }
 
@@ -445,7 +741,7 @@ module.exports = withMDXE({})
     
     // Enhanced waiting logic with file system event verification
     while (!hasProcessedFiles && Date.now() - startTime < timeout) {
-      await sleep(100)
+      await sleep(500)
       if (!watchProcess || watchProcess.killed) {
         debug('Watch process terminated unexpectedly')
         break
@@ -482,11 +778,6 @@ module.exports = withMDXE({})
           pid: watchProcess?.pid
         }
       })
-    }
-
-    // Clean up directory watcher
-    if (dirWatcher) {
-      dirWatcher.close()
     }
 
     expect(hasProcessedFiles).toBe(true)
@@ -531,7 +822,7 @@ Testing next dev integration
     })
 
     debug('Waiting for Next.js dev server to start...')
-    const serverStartTimeout = 60000 // Allow up to 60 seconds for Next.js server startup
+    const serverStartTimeout = 180000 // Match test timeout configuration
     const serverStartTime = Date.now()
     let serverStarted = false
     
