@@ -96,6 +96,27 @@ To reproduce:
 
 These test failures are pre-existing infrastructure issues and do not indicate problems with recent changes to watch handler types.
 
+### TypeScript Type Definition Issues
+
+The following TypeScript errors have been identified and fixed:
+
+1. YAML-LD Property Type Definitions:
+   - File: `src/mdx/processor.ts`
+   - Issues:
+     - Property '$type' does not exist on type '{}'
+     - Property '$context' does not exist on type '{}'
+   - Resolution:
+     - Added proper type definitions for YAML-LD data structures
+     - Using ProcessedMDX['yamlld'] type for structured data
+     - Ensuring consistent typing across the codebase
+   - Using $ prefix as per W3C YAML-LD specification
+
+To reproduce:
+1. Run `pnpm install`
+2. Run `pnpm build`
+
+These issues have been resolved by properly typing the structured data variables and ensuring consistent type usage throughout the codebase.
+
 ### Environment Version Differences
 
 The following environment differences have been identified between local and CI:

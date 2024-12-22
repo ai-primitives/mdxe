@@ -102,19 +102,21 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
     development: process.env.NODE_ENV === 'development'
   });
 
-  // Extract and process structured data from remarkMdxld plugin
-  const mdxldData = (result as {
+  interface MDXLDResult {
     data?: {
       mdxld?: {
         frontmatter?: Record<string, unknown>;
-        yamlld?: Record<string, unknown>;
+        yamlld?: ProcessedMDX['yamlld'];
         components?: Record<string, string>;
         layout?: string;
-        structured?: Record<string, unknown>;
+        structured?: ProcessedMDX['yamlld'];
         executable?: Record<string, string>;
       }
     }
-  }).data?.mdxld || {};
+  }
+
+  // Extract and process structured data from remarkMdxld plugin
+  const mdxldData = (result as MDXLDResult).data?.mdxld || {};
 
   // Extract metadata and structured data
   frontmatter = mdxldData.frontmatter || {};
@@ -128,10 +130,10 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
 
   // Process structured data and executable code blocks
   if (mdxldData.structured) {
-    const structuredData = mdxldData.structured || {};
-    // Only include $type and $context from structured data
-    if (structuredData.$type) yamlld.$type = structuredData.$type;
-    if (structuredData.$context) yamlld.$context = structuredData.$context;
+    const structuredData = mdxldData.structured as ProcessedMDX['yamlld'];
+    // Only include $type and $context from structured data if they exist
+    if ('$type' in structuredData) yamlld.$type = structuredData.$type;
+    if ('$context' in structuredData) yamlld.$context = structuredData.$context;
   }
   if (mdxldData.executable) {
     componentExports += Object.entries(mdxldData.executable)
