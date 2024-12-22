@@ -96,3 +96,20 @@ To reproduce:
 2. Run `pnpm test` to see the errors
 
 These test failures are pre-existing infrastructure issues and do not indicate problems with recent changes to watch handler types.
+
+### Environment Version Differences
+
+The following environment differences have been identified between local and CI:
+
+1. Node.js Version Mismatch:
+   - Local: Node.js v22.11.0, pnpm 9.14.2
+   - CI: Node.js v20.18.1, npm 10.8.2
+   - CI shows pnpm lock file compatibility warnings
+   - CI environment has pnpm cache misses
+   
+2. Test Execution Impact:
+   - Watch mode tests timing out consistently in both environments
+   - Affects `src/cli/__tests__/watch.test.ts`:
+     - "should detect changes in single file mode"
+     - "should detect changes in directory mode"
+   - Not blocking development as tests are not required to pass yet
