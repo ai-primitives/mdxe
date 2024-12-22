@@ -17,8 +17,13 @@ describe('processMDX', () => {
 $type: https://schema.org/BlogPosting
 $context: https://mdx.org.ai/docs
 $id: https://mdx.org.ai/docs/test
-title: Test
-description: Test MDX processing
+title: Test Blog Post
+description: Testing MDX processing with context-specific components
+datePublished: ${new Date().toISOString()}
+author:
+  $type: Person
+  name: Test Author
+layout: @layouts/blog/simple
 ---
 
 # Hello World`
@@ -56,8 +61,13 @@ description: Test MDX processing
 $type: https://schema.org/BlogPosting
 $context: https://mdx.org.ai/docs
 $id: https://mdx.org.ai/docs/test-layout
-title: Test Layout
-description: Test layout resolution
+title: Layout Test Post
+description: Testing context-specific layout resolution
+datePublished: ${new Date().toISOString()}
+author:
+  $type: Person
+  name: Test Author
+layout: @layouts/blog/simple
 ---
 
 # Hello World`
@@ -93,8 +103,13 @@ description: Test layout resolution
 $type: https://schema.org/BlogPosting
 $context: https://mdx.org.ai/docs
 $id: https://mdx.org.ai/docs/auto-layout
-title: Auto Layout Test
-description: Test auto layout resolution
+title: Auto Layout Test Post
+description: Testing automatic layout resolution based on type
+datePublished: ${new Date().toISOString()}
+author:
+  $type: Person
+  name: Test Author
+layout: @layouts/blog/simple
 ---
 
 # Hello World`

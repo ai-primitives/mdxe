@@ -4,6 +4,8 @@ import remarkMdxld from 'remark-mdxld'
 import remarkGfm from 'remark-gfm'
 import { compile } from '@mdx-js/mdx'
 import type { ComponentType } from 'react'
+import type { Root, YAML } from 'mdast'
+import type { VFile } from 'vfile'
 
 export interface MDXProcessorOptions {
   filepath: string;
@@ -81,24 +83,17 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
         strikethrough: true,
         autolink: true
       }],
-      // Configure remark-mdxld with full YAML-LD and component support
-      [remarkMdxld, {
-        // MDX-LD specific options
-        context: options.context,
-        type: options.type,
-        // Enable YAML-LD frontmatter processing
-        yamlld: true,
-        // Support both @ and $ prefixes in frontmatter
-        prefixes: ['@', '$'],
-        // Enable URI-based component imports
-        components: true,
-        // Enable remote layout resolution
-        layouts: true,
-        // Enable structured data processing
-        structured: true,
-        // Enable executable code blocks
-        executable: true
-      }]
+      // Use default remark-mdxld configuration to match next-mdxld
+      remarkMdxld,
+      // Debug plugin to log YAML content after mdxld processing
+      () => (tree: Root, file: VFile) => {
+        const yamlNode = tree.children.find((node): node is YAML => node.type === 'yaml')
+        console.log('Debug: YAML content after mdxld:', yamlNode?.value)
+        console.log('Debug: YAML node type after mdxld:', yamlNode?.type)
+        console.log('Debug: File data after mdxld:', JSON.stringify(file.data, null, 2))
+        console.log('Debug: Full tree after mdxld:', JSON.stringify(tree, null, 2))
+        return tree
+      }
     ],
     jsx: true,
     jsxImportSource: '@mdx-js/react',

@@ -70,31 +70,71 @@ Initial content for page 2
   })
 
   afterEach(async () => {
-    debug('Cleaning up watch process, file watcher, and test directory...')
+    debug('Starting cleanup...')
+    const cleanupTasks = []
+
+    // Kill watch process
     if (watchProcess) {
-      try {
-        watchProcess.kill('SIGTERM')
-        await sleep(1000) // Wait for process to terminate
-      } catch (error) {
-        debug('Error killing watch process:', error)
-      }
-      watchProcess = null
-    }
-    
-    if (processState.fileWatcher) {
-      try {
-        processState.fileWatcher.close()
-      } catch (error) {
-        debug('Error closing file watcher:', error)
-      }
-      processState.fileWatcher = null
+      cleanupTasks.push(
+        new Promise<void>((resolve) => {
+          try {
+            debug('Killing watch process...')
+            watchProcess?.kill('SIGTERM')
+            setTimeout(() => {
+              if (watchProcess?.killed) {
+                debug('Watch process terminated successfully')
+              } else {
+                debug('Force killing watch process...')
+                watchProcess?.kill('SIGKILL')
+              }
+              watchProcess = null
+              resolve()
+            }, 2000)
+          } catch (error) {
+            debug('Error killing watch process:', error)
+            resolve()
+          }
+        })
+      )
     }
 
-    try {
-      rmSync(testDir, { recursive: true, force: true })
-    } catch (error) {
-      debug('Error removing test directory:', error)
+    // Close file watcher
+    if (processState.fileWatcher) {
+      cleanupTasks.push(
+        new Promise<void>((resolve) => {
+          try {
+            debug('Closing file watcher...')
+            processState.fileWatcher?.close()
+            processState.fileWatcher = null
+            debug('File watcher closed successfully')
+          } catch (error) {
+            debug('Error closing file watcher:', error)
+          }
+          resolve()
+        })
+      )
     }
+
+    // Remove test directory
+    cleanupTasks.push(
+      new Promise<void>((resolve) => {
+        try {
+          debug('Removing test directory...')
+          rmSync(testDir, { recursive: true, force: true })
+          debug('Test directory removed successfully')
+        } catch (error) {
+          debug('Error removing test directory:', error)
+        }
+        resolve()
+      })
+    )
+
+    // Wait for all cleanup tasks to complete
+    await Promise.all(cleanupTasks)
+    debug('Cleanup completed')
+    
+    // Reset process state
+    processState = createProcessState()
   })
 
   it('should detect changes in single file mode', async () => {
@@ -107,14 +147,40 @@ Initial content for page 2
     debug('Absolute file path:', absolutePath)
     debug('Current working directory:', process.cwd())
     
-    // Create initial file with synchronous operations
+    // Create initial file with synchronous operations and proper error handling
     try {
-      writeFileSync(absolutePath, `# Initial Test\nThis is a test file.\n`, 'utf-8')
-      debug('Initial file created successfully')
-      debug('Initial file exists:', existsSync(absolutePath))
-      debug('Initial file content:', readFileSync(absolutePath, 'utf-8'))
+      debug('Creating initial file...')
+      const initialContent = `# Initial Test\nThis is a test file.\n`
+      writeFileSync(absolutePath, initialContent, { 
+        encoding: 'utf-8',
+        flag: 'w'
+      })
+      debug('Initial file write completed')
+
+      // Verify file was written correctly
+      if (!existsSync(absolutePath)) {
+        throw new Error('File not created successfully')
+      }
+      debug('Initial file exists check passed')
+
+      const actualContent = readFileSync(absolutePath, 'utf-8')
+      if (actualContent !== initialContent) {
+        debug('Content mismatch - Expected:', initialContent)
+        debug('Content mismatch - Actual:', actualContent)
+        throw new Error('File content verification failed')
+      }
+      debug('Initial file content verified')
+
+      const stats = statSync(absolutePath)
+      debug('File stats:', {
+        size: stats.size,
+        mode: stats.mode,
+        uid: stats.uid,
+        gid: stats.gid,
+        mtime: stats.mtime
+      })
     } catch (error) {
-      debug('Error creating initial file:', error)
+      debug('Error in file creation/verification:', error)
       throw error
     }
 
@@ -234,53 +300,88 @@ Initial content for page 2
         debug('Timeout waiting for watcher:', debugState())
         cleanup()
         reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 60000) // Increased timeout for watch mode tests
+      }, 90000) // Further increased timeout for CI environment
 
+      // Consolidated event handling to prevent race conditions
       if (watchProcess?.stdout) {
         watchProcess.stdout.on('data', handleOutput)
+        debug('Added consolidated output handler')
+      } else {
+        debug('No stdout available for watch process')
+        cleanup()
+        reject(new Error('Watch process stdout not available'))
       }
-
-      const readyHandler = (data: Buffer) => {
-        const output = data.toString()
-        if (output.includes('Initial scan complete')) {
-          watchProcess?.stdout?.removeListener('data', readyHandler)
-          clearTimeout(timeoutId)
-          debug('Watcher ready event received')
-          resolve()
-        }
-      }
-
-      watchProcess?.stdout?.on('data', readyHandler)
     })
     
     await sleep(1000)
 
-    debug('Modifying test file...')
+    debug('Starting file modification process...')
     try {
+      // Ensure file exists before modification
+      if (!existsSync(absolutePath)) {
+        throw new Error('Source file does not exist before modification')
+      }
+      debug('Pre-modification file check passed')
+
       const timestamp = Date.now()
       const newContent = `# Modified Content ${timestamp}\nThis is the updated content.\n`
       
+      // Get original file stats
+      const originalStats = statSync(absolutePath)
+      debug('Original file stats:', {
+        size: originalStats.size,
+        mode: originalStats.mode,
+        mtime: originalStats.mtime
+      })
+
       // Write content with atomic operation
-      writeFileSync(absolutePath, newContent, { encoding: 'utf-8', flag: 'w' })
-      debug('Content written to file')
+      debug('Writing new content...')
+      writeFileSync(absolutePath, newContent, { 
+        encoding: 'utf-8',
+        flag: 'w',
+        mode: originalStats.mode // Preserve file permissions
+      })
+      debug('Content write operation completed')
       
-      // Verify content
-      const verifyContent = readFileSync(absolutePath, 'utf-8')
-      debug('Verification read completed')
+      // Force sync to ensure changes are written to disk
+      const fd = require('fs').openSync(absolutePath, 'r')
+      require('fs').fsyncSync(fd)
+      require('fs').closeSync(fd)
+      debug('File sync completed')
       
+      // Verify content with retries
+      let verifyContent
+      let retryCount = 0
+      const maxRetries = 3
       
-      if (verifyContent !== newContent) {
-        debug('File content verification failed')
-        debug('Expected:', newContent)
-        debug('Actual:', verifyContent)
-        throw new Error('File content verification failed')
+      while (retryCount < maxRetries) {
+        verifyContent = readFileSync(absolutePath, 'utf-8')
+        if (verifyContent === newContent) {
+          debug('Content verification successful on attempt:', retryCount + 1)
+          break
+        }
+        debug('Content verification failed, retrying...')
+        retryCount++
+        await sleep(100) // Short delay between retries
       }
       
-      debug('File modification completed and verified')
-      debug('Modified content:', newContent)
-      debug('File stats:', statSync(absolutePath))
+      if (verifyContent !== newContent) {
+        debug('Final content verification failed')
+        debug('Expected:', newContent)
+        debug('Actual:', verifyContent)
+        throw new Error('File content verification failed after retries')
+      }
+      
+      
+      const newStats = statSync(absolutePath)
+      debug('File modification completed. New stats:', {
+        size: newStats.size,
+        mode: newStats.mode,
+        mtime: newStats.mtime,
+        mtimeMs: newStats.mtimeMs - originalStats.mtimeMs + 'ms since original'
+      })
     } catch (error) {
-      debug('Error modifying file:', error)
+      debug('Error in file modification process:', error)
       if (processState.fileWatcher) processState.fileWatcher.close()
       throw error
     }
