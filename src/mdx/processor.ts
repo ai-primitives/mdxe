@@ -2,8 +2,11 @@ import { resolveRemoteImport, fetchRemoteComponent } from './remote.js'
 import type { RemoteImportOptions, RemoteImportResult } from '../types/remote.d.ts'
 import remarkMdxld from 'remark-mdxld'
 import remarkGfm from 'remark-gfm'
+import remarkFrontmatter from 'remark-frontmatter'
 import { compile } from '@mdx-js/mdx'
 import type { ComponentType } from 'react'
+import type { Root, YAML } from 'mdast'
+import type { VFile } from 'vfile'
 
 export interface MDXProcessorOptions {
   filepath: string;
@@ -36,7 +39,10 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   const { content = '', context, type } = options;
   let processedCode = content;
   let componentExports = '';
-  let yamlld = {};
+  let yamlld: ProcessedMDX['yamlld'] = {
+    $type: undefined,
+    $context: undefined
+  };
   let frontmatter: Record<string, unknown> = {};
   let mdxComponents: Record<string, ComponentType> = {};
   let mdxLayout: ComponentType | undefined;
@@ -71,6 +77,8 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   // Process MDX content with enhanced remark plugins for full MDX-LD support
   const result = await compile(content, {
     remarkPlugins: [
+      // Enable frontmatter parsing
+      [remarkFrontmatter, ['yaml']],
       // Enable GitHub Flavored Markdown features
       [remarkGfm, {
         tables: true,
@@ -78,51 +86,64 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
         strikethrough: true,
         autolink: true
       }],
-      // Configure remark-mdxld with full YAML-LD and component support
-      [remarkMdxld, {
-        // MDX-LD specific options
-        context: options.context,
-        type: options.type,
-        // Enable YAML-LD frontmatter processing
-        yamlld: true,
-        // Support both @ and $ prefixes in frontmatter
-        prefixes: ['@', '$'],
-        // Enable URI-based component imports
-        components: true,
-        // Enable remote layout resolution
-        layouts: true,
-        // Enable structured data processing
-        structured: true,
-        // Enable executable code blocks
-        executable: true
-      }]
+      // Debug plugin to log YAML content before mdxld
+      () => (tree: Root, file: VFile) => {
+        const yamlNode = tree.children.find((node): node is YAML => node.type === 'yaml')
+        console.log('Debug: YAML content before mdxld:', yamlNode?.value)
+        console.log('Debug: YAML node type before mdxld:', yamlNode?.type)
+        console.log('Debug: File data before mdxld:', JSON.stringify(file.data, null, 2))
+        return tree
+      },
+      // Use default remark-mdxld configuration to match next-mdxld
+      remarkMdxld,
+      // Debug plugin to log YAML content after mdxld
+      () => (tree: Root, file: VFile) => {
+        const yamlNode = tree.children.find((node): node is YAML => node.type === 'yaml')
+        console.log('Debug: YAML content after mdxld:', yamlNode?.value)
+        console.log('Debug: YAML node type after mdxld:', yamlNode?.type)
+        console.log('Debug: File data after mdxld:', JSON.stringify(file.data, null, 2))
+        return tree
+      }
     ],
     jsx: true,
     jsxImportSource: '@mdx-js/react',
     development: process.env.NODE_ENV === 'development'
   });
 
-  // Extract and process structured data from remarkMdxld plugin
-  const mdxldData = (result as {
+  interface MDXLDResult {
     data?: {
       mdxld?: {
         frontmatter?: Record<string, unknown>;
-        yamlld?: Record<string, unknown>;
+        yamlld?: ProcessedMDX['yamlld'];
         components?: Record<string, string>;
         layout?: string;
-        structured?: Record<string, unknown>;
+        structured?: ProcessedMDX['yamlld'];
         executable?: Record<string, string>;
       }
     }
-  }).data?.mdxld || {};
+  }
+
+  // Extract and process structured data from remarkMdxld plugin
+  const mdxldData = (result as MDXLDResult).data?.mdxld || {};
 
   // Extract metadata and structured data
   frontmatter = mdxldData.frontmatter || {};
-  yamlld = mdxldData.yamlld || {};
+  const rawYamlld = mdxldData.yamlld || {};
+
+  // Filter yamlld to only include $type and $context
+  if (rawYamlld.$type) yamlld.$type = rawYamlld.$type;
+  if (rawYamlld.$context) yamlld.$context = rawYamlld.$context;
 
   // Process structured data and executable code blocks
   if (mdxldData.structured) {
-    yamlld = { ...yamlld, ...mdxldData.structured };
+    const structuredData = mdxldData.structured as ProcessedMDX['yamlld'];
+    // Only include $type and $context from structured data if they exist
+    if (structuredData?.$type) {
+      yamlld.$type = structuredData.$type;
+    }
+    if (structuredData?.$context) {
+      yamlld.$context = structuredData.$context;
+    }
   }
   if (mdxldData.executable) {
     componentExports += Object.entries(mdxldData.executable)
@@ -137,19 +158,31 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   };
   
   const remoteImports = await resolveRemoteImport(remoteOptions);
-  const typedImports = remoteImports as RemoteImportResult;
+  const typedImports = remoteImports as RemoteImportResult | null;
   
-  if (typedImports.layout) {
+  // Handle layout resolution with proper null checks
+  if (typedImports && typedImports.layout && typeof typedImports.layout === 'string') {
     mdxLayout = typedImports.layout;
-    const layoutStr = typedImports.layoutString || 'undefined';
-    processedCode = `export const layout = ${layoutStr}\n${processedCode}`;
+    processedCode = `export { default as layout } from '${typedImports.layout}'\n${processedCode}`;
+  } else if (options.layout) {
+    // Fallback to options.layout if remote import failed
+    console.warn('Layout import failed, using fallback layout');
+    processedCode = `export const layout = undefined\n${processedCode}`;
+  } else {
+    // Always ensure layout export exists
+    processedCode = `export const layout = undefined\n${processedCode}`;
   }
-  if (typedImports.components) {
+
+  // Handle component resolution with proper null checks
+  if (typedImports && typedImports.components) {
     mdxComponents = typedImports.components;
-    const componentStrs = typedImports.componentStrings || {};
-    processedCode = `export const components = {\n${Object.entries(componentStrs)
-      .map(([name, str]) => `  ${name}: ${str}`)
-      .join(',\n')}\n}\n${processedCode}`;
+    Object.entries(typedImports.components).forEach(([name, component]) => {
+      if (typeof component === 'string') {
+        processedCode = `export { default as ${name} } from '${component}'\n${processedCode}`;
+      } else {
+        console.warn(`Skipping component ${name}: invalid import URL`);
+      }
+    });
   }
 
   // Combine exports with content

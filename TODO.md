@@ -96,6 +96,83 @@ To reproduce:
 
 These test failures are pre-existing infrastructure issues and do not indicate problems with recent changes to watch handler types.
 
+### Integration Issues
+
+The following issues are currently blocking CI builds in PR #17:
+
+1. Environment Standardization:
+   - Node.js Version: Updated package.json to require >=20.18.1
+   - CI Environment: Running on ubuntu-24.04 (upcoming upgrade)
+   - Local Development: Currently on Node.js v22.11.0
+   - Action Taken: Added engines field to enforce version compatibility
+
+2. Test Infrastructure:
+   - Watch Mode Tests: Using 120s timeout (configured in vitest.config.ts)
+   - Test Files: Added required YAML-LD frontmatter to all test MDX files
+   - Hook Timeout: Set to 120s for setup/teardown operations
+   - State Management: Improved process state tracking in watch tests
+
+3. Module Resolution:
+   - Error: Cannot find module 'next-mdxld/dist/components'
+   - Error: Cannot find module 'remark-mdxld/dist/yaml-ld'
+   - Impact: Test failures in remote.test.ts, processor.test.ts, and watch.test.ts
+   - Root Cause: Module resolution issues in both local and CI environments
+   - Required Actions:
+     - Update next-mdxld and remark-mdxld dependencies to latest versions
+     - Verify module paths in imports
+     - Add proper error handling for missing modules
+     - Investigate remark-mdxld package structure and yaml-ld module location
+
+2. Previous Issues:
+
+1. YAML-LD Property Requirements:
+   - Error: "Missing required frontmatter" from remark-mdxld
+   - Impact: Test failures in processor.test.ts
+   - Required Properties:
+     - $type (required by remark-mdxld)
+     - $context (required by remark-mdxld)
+   - Cross-Repository Impact:
+     - mdxe: Blocking CI builds
+     - next-mdxld: Needs documentation update for required fields
+
+2. Watch Mode Test Failures:
+   - Error: "Timeout waiting for watcher to be ready"
+   - Location: watch.test.ts:302:16 and watch.test.ts:504:16
+   - Impact: Test failures in PR #17
+   - Affected Tests:
+     - "should detect changes in single file mode"
+     - "should detect changes in directory mode"
+   - Root Cause Analysis:
+     - Race conditions in watcher initialization
+     - Default timeout (30s) insufficient for CI environment
+     - Environment differences between local and CI
+   - Required Actions:
+     - [ ] Increase test timeout in vitest.config.ts
+     - [ ] Add proper watcher initialization checks
+     - [ ] Implement retry mechanism for flaky tests
+
+3. Type Definition Issues:
+   - File: `src/mdx/processor.ts`
+   - Active Issues:
+     - Property '$type' does not exist on type '{}'
+     - Property '$context' does not exist on type '{}'
+   - Current Status:
+     - Type definitions added but not properly recognized
+     - ProcessedMDX['yamlld'] type not correctly narrowing
+     - Using $ prefix as per W3C YAML-LD specification
+
+To reproduce:
+1. Run `pnpm install`
+2. Run `pnpm test`
+3. Observe errors:
+   ```
+   Error: Missing required frontmatter
+   ReferenceError: fileWatcher is not defined
+   Error: Timeout waiting for watcher to be ready
+   ```
+
+Investigation ongoing to resolve integration issues between mdxe and remark-mdxld packages.
+
 ### Environment Version Differences
 
 The following environment differences have been identified between local and CI:

@@ -60,6 +60,9 @@ importers:
       '@types/debug':
         specifier: ^4.1.12
         version: 4.1.12
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
       '@types/mdx-js__react':
         specifier: ^1.5.8
         version: 1.5.8
@@ -105,6 +108,9 @@ importers:
       prettier:
         specifier: ^3.4.2
         version: 3.4.2
+      remark-frontmatter:
+        specifier: ^5.0.0
+        version: 5.0.0
       semantic-release:
         specifier: ^24.2.0
         version: 24.2.0(typescript@5.7.2)
@@ -117,6 +123,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
+      vfile:
+        specifier: ^6.0.3
+        version: 6.0.3
       vitest:
         specifier: ^2.1.8
         version: 2.1.8(@types/node@22.10.2)(terser@5.37.0)

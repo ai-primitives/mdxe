@@ -2,8 +2,30 @@ import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { setTimeout, clearTimeout } from 'node:timers'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch, FSWatcher } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch } from 'fs'
 import { sleep, debug } from '../../test/setup.js'
+
+interface ProcessState {
+  ready: boolean
+  changed: boolean
+  error: Error | null
+  lastOutput: string
+  hasProcessedFile: boolean
+  hasProcessedFiles: boolean
+  fileWatcher: ReturnType<typeof watch> | null
+}
+
+const createProcessState = (): ProcessState => ({
+  ready: false,
+  changed: false,
+  error: null,
+  lastOutput: '',
+  hasProcessedFile: false,
+  hasProcessedFiles: false,
+  fileWatcher: null
+})
+
+let processState: ProcessState = createProcessState()
 
 const log = {
   test: (msg: string, ...args: unknown[]) => debug(`[TEST] ${msg}`, ...args),
@@ -48,27 +70,75 @@ Initial content for page 2
   })
 
   afterEach(async () => {
-    debug('Cleaning up watch process and test directory...')
+    debug('Starting cleanup...')
+    const cleanupTasks = []
+
+    // Kill watch process
     if (watchProcess) {
-      try {
-        watchProcess.kill('SIGTERM')
-        await sleep(1000) // Wait for process to terminate
-      } catch (error) {
-        debug('Error killing watch process:', error)
-      }
-      watchProcess = null
+      cleanupTasks.push(
+        new Promise<void>((resolve) => {
+          try {
+            debug('Killing watch process...')
+            watchProcess?.kill('SIGTERM')
+            setTimeout(() => {
+              if (watchProcess?.killed) {
+                debug('Watch process terminated successfully')
+              } else {
+                debug('Force killing watch process...')
+                watchProcess?.kill('SIGKILL')
+              }
+              watchProcess = null
+              resolve()
+            }, 2000)
+          } catch (error) {
+            debug('Error killing watch process:', error)
+            resolve()
+          }
+        })
+      )
     }
 
-    try {
-      rmSync(testDir, { recursive: true, force: true })
-    } catch (error) {
-      debug('Error removing test directory:', error)
+    // Close file watcher
+    if (processState.fileWatcher) {
+      cleanupTasks.push(
+        new Promise<void>((resolve) => {
+          try {
+            debug('Closing file watcher...')
+            processState.fileWatcher?.close()
+            processState.fileWatcher = null
+            debug('File watcher closed successfully')
+          } catch (error) {
+            debug('Error closing file watcher:', error)
+          }
+          resolve()
+        })
+      )
     }
+
+    // Remove test directory
+    cleanupTasks.push(
+      new Promise<void>((resolve) => {
+        try {
+          debug('Removing test directory...')
+          rmSync(testDir, { recursive: true, force: true })
+          debug('Test directory removed successfully')
+        } catch (error) {
+          debug('Error removing test directory:', error)
+        }
+        resolve()
+      })
+    )
+
+    // Wait for all cleanup tasks to complete
+    await Promise.all(cleanupTasks)
+    debug('Cleanup completed')
+    
+    // Reset process state
+    processState = createProcessState()
   })
 
   it('should detect changes in single file mode', async () => {
-    let hasProcessedFile = false
-    let fileWatcher: FSWatcher | null = null
+    processState = createProcessState()
     const absolutePath = resolve(process.cwd(), singleFile)
     const args = ['--watch', absolutePath]
 
@@ -77,22 +147,42 @@ Initial content for page 2
     debug('Absolute file path:', absolutePath)
     debug('Current working directory:', process.cwd())
     
-    // Create initial file with synchronous operations
+    // Create initial file with synchronous operations and proper error handling
     try {
-      writeFileSync(absolutePath, `# Initial Test\nThis is a test file.\n`, 'utf-8')
-      debug('Initial file created successfully')
-      debug('Initial file exists:', existsSync(absolutePath))
-      debug('Initial file content:', readFileSync(absolutePath, 'utf-8'))
+      debug('Creating initial file...')
+      const initialContent = `# Initial Test\nThis is a test file.\n`
+      writeFileSync(absolutePath, initialContent, { 
+        encoding: 'utf-8',
+        flag: 'w'
+      })
+      debug('Initial file write completed')
+
+      // Verify file was written correctly
+      if (!existsSync(absolutePath)) {
+        throw new Error('File not created successfully')
+      }
+      debug('Initial file exists check passed')
+
+      const actualContent = readFileSync(absolutePath, 'utf-8')
+      if (actualContent !== initialContent) {
+        debug('Content mismatch - Expected:', initialContent)
+        debug('Content mismatch - Actual:', actualContent)
+        throw new Error('File content verification failed')
+      }
+      debug('Initial file content verified')
+
+      const stats = statSync(absolutePath)
+      debug('File stats:', {
+        size: stats.size,
+        mode: stats.mode,
+        uid: stats.uid,
+        gid: stats.gid,
+        mtime: stats.mtime
+      })
     } catch (error) {
-      debug('Error creating initial file:', error)
+      debug('Error in file creation/verification:', error)
       throw error
     }
-
-    // Set up a file watcher to monitor changes independently
-    fileWatcher = watch(absolutePath)
-    fileWatcher.on('change', (eventType, filename) => {
-      debug('File system event detected:', { eventType, filename })
-    })
 
     // Ensure file exists before starting watch
     await sleep(1000)
@@ -118,7 +208,6 @@ Initial content for page 2
 
     if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
-      if (fileWatcher) fileWatcher.close()
       throw new Error('Failed to spawn process or get process streams')
     }
 
@@ -127,15 +216,23 @@ Initial content for page 2
     
     stdout.on('data', (data) => {
       const output = data.toString()
+      processState.lastOutput = output
       debug('Watch process output:', output)
+      
+      if (output.includes('Initial scan complete')) {
+        processState.ready = true
+        debug('Watch process ready')
+      }
+      
       if (output.includes('Processing file:') || output.includes('File changed:') || output.includes('Watch target:')) {
-        hasProcessedFile = true
-        debug('File change or process success detected:', output.trim())
+        processState.changed = true
+        processState.hasProcessedFile = true
+        debug('File change detected:', output.trim())
       }
     })
 
     if (!watchProcess.stderr) {
-      if (fileWatcher) fileWatcher.close()
+      if (processState.fileWatcher) processState.fileWatcher.close()
       throw new Error('Failed to get stderr from watch process')
     }
 
@@ -175,7 +272,7 @@ Initial content for page 2
       const cleanup = () => {
         if (timeoutId) clearTimeout(timeoutId)
         if (watchProcess?.stdout) watchProcess.stdout.removeListener('data', handleOutput)
-        if (fileWatcher) fileWatcher.close()
+        if (processState.fileWatcher) processState.fileWatcher.close()
       }
 
       const handleOutput = (data: Buffer) => {
@@ -203,54 +300,89 @@ Initial content for page 2
         debug('Timeout waiting for watcher:', debugState())
         cleanup()
         reject(new Error('Timeout waiting for watcher to be ready'))
-      }, 60000) // Increased timeout for watch mode tests
+      }, 90000) // Further increased timeout for CI environment
 
+      // Consolidated event handling to prevent race conditions
       if (watchProcess?.stdout) {
         watchProcess.stdout.on('data', handleOutput)
+        debug('Added consolidated output handler')
+      } else {
+        debug('No stdout available for watch process')
+        cleanup()
+        reject(new Error('Watch process stdout not available'))
       }
-
-      const readyHandler = (data: Buffer) => {
-        const output = data.toString()
-        if (output.includes('Initial scan complete')) {
-          watchProcess?.stdout?.removeListener('data', readyHandler)
-          clearTimeout(timeoutId)
-          debug('Watcher ready event received')
-          resolve()
-        }
-      }
-
-      watchProcess?.stdout?.on('data', readyHandler)
     })
     
     await sleep(1000)
 
-    debug('Modifying test file...')
+    debug('Starting file modification process...')
     try {
+      // Ensure file exists before modification
+      if (!existsSync(absolutePath)) {
+        throw new Error('Source file does not exist before modification')
+      }
+      debug('Pre-modification file check passed')
+
       const timestamp = Date.now()
       const newContent = `# Modified Content ${timestamp}\nThis is the updated content.\n`
       
+      // Get original file stats
+      const originalStats = statSync(absolutePath)
+      debug('Original file stats:', {
+        size: originalStats.size,
+        mode: originalStats.mode,
+        mtime: originalStats.mtime
+      })
+
       // Write content with atomic operation
-      writeFileSync(absolutePath, newContent, { encoding: 'utf-8', flag: 'w' })
-      debug('Content written to file')
+      debug('Writing new content...')
+      writeFileSync(absolutePath, newContent, { 
+        encoding: 'utf-8',
+        flag: 'w',
+        mode: originalStats.mode // Preserve file permissions
+      })
+      debug('Content write operation completed')
       
-      // Verify content
-      const verifyContent = readFileSync(absolutePath, 'utf-8')
-      debug('Verification read completed')
+      // Force sync to ensure changes are written to disk
+      const fd = require('fs').openSync(absolutePath, 'r')
+      require('fs').fsyncSync(fd)
+      require('fs').closeSync(fd)
+      debug('File sync completed')
       
+      // Verify content with retries
+      let verifyContent
+      let retryCount = 0
+      const maxRetries = 3
       
-      if (verifyContent !== newContent) {
-        debug('File content verification failed')
-        debug('Expected:', newContent)
-        debug('Actual:', verifyContent)
-        throw new Error('File content verification failed')
+      while (retryCount < maxRetries) {
+        verifyContent = readFileSync(absolutePath, 'utf-8')
+        if (verifyContent === newContent) {
+          debug('Content verification successful on attempt:', retryCount + 1)
+          break
+        }
+        debug('Content verification failed, retrying...')
+        retryCount++
+        await sleep(100) // Short delay between retries
       }
       
-      debug('File modification completed and verified')
-      debug('Modified content:', newContent)
-      debug('File stats:', statSync(absolutePath))
+      if (verifyContent !== newContent) {
+        debug('Final content verification failed')
+        debug('Expected:', newContent)
+        debug('Actual:', verifyContent)
+        throw new Error('File content verification failed after retries')
+      }
+      
+      
+      const newStats = statSync(absolutePath)
+      debug('File modification completed. New stats:', {
+        size: newStats.size,
+        mode: newStats.mode,
+        mtime: newStats.mtime,
+        mtimeMs: newStats.mtimeMs - originalStats.mtimeMs + 'ms since original'
+      })
     } catch (error) {
-      debug('Error modifying file:', error)
-      if (fileWatcher) fileWatcher.close()
+      debug('Error in file modification process:', error)
+      if (processState.fileWatcher) processState.fileWatcher.close()
       throw error
     }
 
@@ -260,7 +392,7 @@ Initial content for page 2
     const startTime = Date.now()
     
     // Enhanced waiting logic with file system event verification
-    while (!hasProcessedFile && Date.now() - startTime < timeout) {
+    while (!processState.hasProcessedFile && Date.now() - startTime < timeout) {
       await sleep(100)
       if (!watchProcess || watchProcess.killed) {
         debug('Watch process terminated unexpectedly')
@@ -275,7 +407,7 @@ Initial content for page 2
       }
     }
     
-    if (!hasProcessedFile) {
+    if (!processState.hasProcessedFile) {
       debug('Timeout or failure occurred:', {
         elapsed: Date.now() - startTime,
         timeout,
@@ -292,28 +424,16 @@ Initial content for page 2
       })
     }
 
-    // Clean up file watcher
-    if (fileWatcher) {
-      fileWatcher.close()
-    }
-
-    expect(hasProcessedFile).toBe(true)
+    expect(processState.changed).toBe(true)
   })
 
   it('should detect changes in directory mode', async () => {
-    let hasProcessedFiles = false
-    let dirWatcher: FSWatcher | null = null
+    processState = createProcessState()
     const args = ['--watch', multiDir]
 
     debug('=== Directory Mode Test Setup ===')
     debug('Test directory path:', multiDir)
     debug('Current working directory:', process.cwd())
-
-    // Set up directory watcher
-    dirWatcher = watch(multiDir, { recursive: true })
-    dirWatcher.on('change', (eventType, filename) => {
-      debug('Directory watcher event:', { eventType, filename })
-    })
 
     watchProcess = spawn('node', ['./bin/cli.js', ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -332,7 +452,6 @@ Initial content for page 2
 
     if (!watchProcess || !watchProcess.stdout) {
       if (watchProcess) watchProcess.kill()
-      if (dirWatcher) dirWatcher.close()
       throw new Error('Failed to spawn process or get process streams')
     }
 
@@ -341,15 +460,22 @@ Initial content for page 2
 
     stdout.on('data', (data) => {
       const output = data.toString()
+      processState.lastOutput = output
       debug('Watch process output:', output)
+      
+      if (output.includes('Initial scan complete')) {
+        processState.ready = true
+        debug('Watch process ready')
+      }
+      
       if (output.includes('has been changed') || output.includes('Successfully processed file:')) {
-        hasProcessedFiles = true
-        debug('File change or process success detected')
+        processState.changed = true
+        processState.hasProcessedFiles = true
+        debug('File change detected')
       }
     })
 
     if (!watchProcess.stderr) {
-      if (dirWatcher) dirWatcher.close()
       throw new Error('Failed to get stderr from watch process')
     }
 
@@ -375,7 +501,6 @@ Initial content for page 2
               readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'DIR_NOT_FOUND'
           }
         })
-        if (dirWatcher) dirWatcher.close()
         reject(new Error('Timeout waiting for watcher to be ready'))
       }, 30000)
 
@@ -428,7 +553,6 @@ Initial content for page 2
       })
     } catch (error) {
       debug('Error modifying files:', error)
-      if (dirWatcher) dirWatcher.close()
       throw error
     }
 
@@ -438,7 +562,7 @@ Initial content for page 2
     const startTime = Date.now()
     
     // Enhanced waiting logic with file system event verification
-    while (!hasProcessedFiles && Date.now() - startTime < timeout) {
+    while (!processState.hasProcessedFiles && Date.now() - startTime < timeout) {
       await sleep(100)
       if (!watchProcess || watchProcess.killed) {
         debug('Watch process terminated unexpectedly')
@@ -457,7 +581,7 @@ Initial content for page 2
       }
     }
     
-    if (!hasProcessedFiles) {
+    if (!processState.hasProcessedFiles) {
       debug('Timeout or failure occurred:', {
         elapsed: Date.now() - startTime,
         timeout,
@@ -478,12 +602,7 @@ Initial content for page 2
       })
     }
 
-    // Clean up directory watcher
-    if (dirWatcher) {
-      dirWatcher.close()
-    }
-
-    expect(hasProcessedFiles).toBe(true)
+    expect(processState.changed).toBe(true)
   })
 
 })

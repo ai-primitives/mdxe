@@ -47,6 +47,9 @@
   "bugs": {
     "url": "https://github.com/ai-primitives/package-template/issues"
   },
+  "engines": {
+    "node": ">=20.18.1"
+  },
   "dependencies": {
     "@mdx-js/mdx": "^3.0.0",
     "@mdx-js/react": "^3.0.0",
@@ -67,6 +70,7 @@
     "@semantic-release/release-notes-generator": "^14.0.1",
     "@tailwindcss/typography": "^0.5.15",
     "@types/debug": "^4.1.12",
+    "@types/mdast": "^4.0.4",
     "@types/mdx-js__react": "^1.5.8",
     "@types/node": "^22.10.2",
     "@types/node-fetch": "^2.6.12",
@@ -82,10 +86,12 @@
     "node-fetch": "^3.3.2",
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
+    "remark-frontmatter": "^5.0.0",
     "semantic-release": "^24.2.0",
     "tailwindcss": "^3.4.16",
     "tsx": "^4.7.0",
     "typescript": "^5.7.2",
+    "vfile": "^6.0.3",
     "vitest": "^2.1.8",
     "webpack": "^5.97.1"
   }

@@ -13,19 +13,28 @@ describe('processMDX', () => {
   })
 
   it('should process MDX with context-specific components', async () => {
-    const mockContent = `
----
-title: Test
+    const mockContent = `---
 $type: https://schema.org/BlogPosting
 $context: https://mdx.org.ai/docs
+$id: https://mdx.org.ai/docs/test
+title: Test Blog Post
+description: Testing MDX processing with context-specific components
+datePublished: ${new Date().toISOString()}
+author:
+  $type: Person
+  name: Test Author
+layout: '@layouts/blog/simple'
 ---
-# Hello World
-    `
+
+# Hello World`
     const mockComponents = {
       Button: 'react-button',
     }
 
-    ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce('https://esm.sh/@mdxui/docs/components/Button')
+    ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce({
+      components: { Button: () => null },
+      componentStrings: { Button: `import('https://esm.sh/@mdxui/docs/components/Button').then(m => m.default)` }
+    })
     ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function Button() {}')
 
     const result = await processMDX({
@@ -48,16 +57,26 @@ $context: https://mdx.org.ai/docs
   })
 
   it('should handle context-specific layout resolution', async () => {
-    const mockContent = `
----
+    const mockContent = `---
 $type: https://schema.org/BlogPosting
 $context: https://mdx.org.ai/docs
+$id: https://mdx.org.ai/docs/test-layout
+title: Layout Test Post
+description: Testing context-specific layout resolution
+datePublished: ${new Date().toISOString()}
+author:
+  $type: Person
+  name: Test Author
+layout: '@layouts/blog/simple'
 ---
-# Hello World
-    `
+
+# Hello World`
     const mockLayout = '@layouts/blog/simple'
 
-    ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce('https://esm.sh/@mdxui/docs/layouts/blog')
+    ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce({
+      layout: () => null,
+      layoutString: `import('https://esm.sh/@mdxui/docs/layouts/blog').then(m => m.default)`
+    })
     ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function BlogLayout() {}')
 
     const result = await processMDX({
@@ -80,15 +99,25 @@ $context: https://mdx.org.ai/docs
   })
 
   it('should auto-resolve layout based on type', async () => {
-    const mockContent = `
----
+    const mockContent = `---
 $type: https://schema.org/BlogPosting
 $context: https://mdx.org.ai/docs
+$id: https://mdx.org.ai/docs/auto-layout
+title: Auto Layout Test Post
+description: Testing automatic layout resolution based on type
+datePublished: ${new Date().toISOString()}
+author:
+  $type: Person
+  name: Test Author
+layout: '@layouts/blog/simple'
 ---
-# Hello World
-    `
 
-    ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce('https://esm.sh/@mdxui/docs/layouts/blog')
+# Hello World`
+
+    ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce({
+      layout: () => null,
+      layoutString: `import('https://esm.sh/@mdxui/docs/layouts/blog').then(m => m.default)`
+    })
     ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function BlogLayout() {}')
 
     const result = await processMDX({
