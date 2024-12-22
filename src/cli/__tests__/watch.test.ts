@@ -147,6 +147,11 @@ module.exports = withMDXE({})
       rmSync(absolutePath)
     }
     
+    // Sync directory after cleanup
+    const dirFd = openSync(dirname(absolutePath), 'r')
+    fsyncSync(dirFd)
+    closeSync(dirFd)
+    
     // Create initial file with proper synchronization
     let fd: number | undefined
     try {
@@ -222,10 +227,24 @@ module.exports = withMDXE({})
     const handleStdout = (data: Buffer) => {
       const output = data.toString()
       debug('Watch process output:', output)
-      if (output.includes('Processing file:') || output.includes('File changed:') || output.includes('Watch target:')) {
+      
+      // More specific output matching
+      const successIndicators = [
+        'Processing file:',
+        'File changed:',
+        'Watch target:',
+        'Watching for changes',
+        'Starting watch mode'
+      ]
+      
+      if (successIndicators.some(indicator => output.includes(indicator))) {
         hasProcessedFile = true
-        debug('File change or process success detected:', output.trim())
+        debug('File change or process success detected:', {
+          output: output.trim(),
+          matchedIndicator: successIndicators.find(i => output.includes(i))
+        })
       }
+      
       // Additional debug info
       if (output.includes('error') || output.includes('Error')) {
         debug('Error detected in watch process output:', output.trim())
@@ -243,6 +262,11 @@ module.exports = withMDXE({})
 
     // Wait for watcher to be ready with enhanced logging and timeout handling
     debug('Waiting for watcher to be ready...')
+    debug('Process environment:', {
+      DEBUG: process.env.DEBUG,
+      NODE_DEBUG: process.env.NODE_DEBUG,
+      NODE_ENV: process.env.NODE_ENV
+    })
     
     await new Promise<void>((resolve, reject) => {
       const startTime = Date.now()
@@ -344,77 +368,177 @@ module.exports = withMDXE({})
     
     await sleep(1000)
 
-    debug('Modifying test file...')
+    debug('=== Starting file modification test ===')
     try {
+      // Ensure watcher is ready and stable
+      await sleep(2000)
+      debug('Starting file modification after delay')
+      
       const timestamp = Date.now()
       const newContent = `# Modified Content ${timestamp}\nThis is the updated content.\n`
       
-      // Write content with atomic operation and fsync
-      const fd = openSync(filePath, 'w')
-      writeFileSync(fd, newContent, 'utf-8')
-      fsyncSync(fd)
-      closeSync(fd)
-      debug('Content written and synced to file')
-      
-      // Verify content immediately
-      const verifyContent = readFileSync(filePath, 'utf-8')
-      debug('Verification read completed')
-      
-      if (verifyContent !== newContent) {
-        debug('File content verification failed')
-        debug('Expected:', newContent)
-        debug('Actual:', verifyContent)
-        throw new Error('File content verification failed')
+      // Write content with atomic operation and explicit sync
+      let fd: number | undefined
+      try {
+        // First, truncate the file to ensure a complete rewrite
+        fd = openSync(filePath, 'w')
+        writeFileSync(fd, '', 'utf-8')
+        fsyncSync(fd)
+        closeSync(fd)
+        
+        // Then write the new content
+        fd = openSync(filePath, 'w')
+        writeFileSync(fd, newContent, 'utf-8')
+        fsyncSync(fd)
+        closeSync(fd)
+        fd = undefined
+        
+        // Force a file system sync
+        const syncFd = openSync(dirname(filePath), 'r')
+        fsyncSync(syncFd)
+        closeSync(syncFd)
+        
+        debug('Content written and synced to file')
+      } catch (error) {
+        if (fd !== undefined) {
+          try {
+            closeSync(fd)
+          } catch (e) {
+            debug('Error closing file during error handling:', e)
+          }
+        }
+        throw error
       }
       
-      // Get detailed file information
+      // Verify content with retries
+      let verifyContent: string | undefined
+      let verifyAttempts = 0
+      const maxAttempts = 5
+      
+      while (verifyAttempts < maxAttempts) {
+        try {
+          verifyContent = readFileSync(filePath, 'utf-8')
+          if (verifyContent === newContent) {
+            break
+          }
+          debug(`Content verification attempt ${verifyAttempts + 1} failed, retrying...`)
+          await sleep(500)
+        } catch (e) {
+          debug(`Read error on attempt ${verifyAttempts + 1}:`, e)
+        }
+        verifyAttempts++
+      }
+      
+      if (!verifyContent || verifyContent !== newContent) {
+        debug('File content verification failed after all attempts')
+        debug('Expected:', newContent)
+        debug('Actual:', verifyContent)
+        throw new Error('File content verification failed after multiple attempts')
+      }
+      
+      // Get and log detailed file information
       const stats = statSync(filePath)
       debug('File modification completed and verified', {
         size: stats.size,
+        mode: stats.mode,
         mtime: stats.mtime,
         ctime: stats.ctime,
+        uid: stats.uid,
+        gid: stats.gid,
         content: verifyContent,
-        exists: existsSync(filePath)
+        exists: existsSync(filePath),
+        verifyAttempts
       })
     } catch (error) {
       debug('Error modifying file:', error)
       throw error
     }
 
-    debug('Waiting for file change detection...')
-    // Wait for change event with timeout matching global vitest config
-    const timeout = 120000
+    debug('=== Waiting for file change detection ===')
+    const timeout = 120000 // Match global vitest timeout
     const startTime = Date.now()
+    let lastCheck = startTime
+    let checkCount = 0
     
-    // Enhanced waiting logic with file system event verification
+    // Enhanced waiting logic with progressive status updates
     while (!hasProcessedFile && Date.now() - startTime < timeout) {
-      await sleep(100)
+      const now = Date.now()
+      checkCount++
+      
+      // Log status every second
+      if (now - lastCheck >= 1000) {
+        debug('Waiting for change detection...', {
+          elapsedMs: now - startTime,
+          checks: checkCount,
+          hasProcessedFile,
+          processActive: !!watchProcess && !watchProcess.killed
+        })
+        lastCheck = now
+      }
+      
+      // Check process state and output
       if (!watchProcess || watchProcess.killed) {
         debug('Watch process terminated unexpectedly')
         break
       }
-      // Verify file content periodically
+
+      // Enhanced file state verification with buffer check
       try {
+        const stats = statSync(filePath)
         const currentContent = readFileSync(filePath, 'utf-8')
-        debug('Current file content:', currentContent)
+        debug('Current file state:', {
+          size: stats.size,
+          mtime: stats.mtime,
+          content: currentContent.slice(0, 100) + (currentContent.length > 100 ? '...' : ''),
+          exists: true,
+          processState: {
+            killed: watchProcess?.killed,
+            exitCode: watchProcess?.exitCode,
+            pid: watchProcess?.pid
+          }
+        })
+
+        // Check process stdout buffer
+        if (watchProcess.stdout) {
+          const stdoutBuffer = (watchProcess.stdout as any)._readableState?.buffer
+          if (stdoutBuffer) {
+            debug('Process stdout buffer state:', {
+              length: stdoutBuffer.length,
+              hasData: stdoutBuffer.length > 0
+            })
+          }
+        }
       } catch (error) {
-        debug('Error reading file during wait:', error)
+        debug('Error checking file state:', error)
       }
+      
+      // Adaptive sleep between checks
+      await sleep(checkCount < 10 ? 100 : 500)
     }
     
+    // Detailed failure information
     if (!hasProcessedFile) {
-      debug('Timeout or failure occurred:', {
-        elapsed: Date.now() - startTime,
-        timeout,
-        watcherActive: !!watchProcess && !watchProcess.killed,
-        fileState: {
-          exists: existsSync(filePath),
-          content: existsSync(filePath) ? readFileSync(filePath, 'utf-8') : 'FILE_NOT_FOUND'
+      const endTime = Date.now()
+      debug('Change detection timeout or failure:', {
+        testDuration: {
+          elapsed: endTime - startTime,
+          timeout,
+          checkCount
         },
         processState: {
+          active: !!watchProcess && !watchProcess.killed,
           killed: watchProcess?.killed,
           exitCode: watchProcess?.exitCode,
           pid: watchProcess?.pid
+        },
+        fileState: {
+          exists: existsSync(filePath),
+          stats: existsSync(filePath) ? statSync(filePath) : null,
+          content: existsSync(filePath) ? readFileSync(filePath, 'utf-8') : 'FILE_NOT_FOUND'
+        },
+        watcherState: {
+          hasProcessedFile,
+          outputHistory: stdout ? 'Available' : 'Not available'
         }
       })
     }
