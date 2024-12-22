@@ -1,0 +1,20 @@
+---
+$type: https://mdx.org.ai/types/Agent
+$context: https://mdx.org.ai/context/agent
+name: Support Agent
+capabilities:
+  - answer questions
+  - resolve issues
+  - provide documentation
+---
+
+export layout from 'https://esm.sh/@mdxui/agent/chat'
+export components from 'https://esm.sh/@mdxui/shadcn'
+
+# Support Agent
+
+This is an example support agent using mdx.org.ai types.
+
+<Chat>
+  <Message>How can I help you today?</Message>
+</Chat>
