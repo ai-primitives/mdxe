@@ -31,7 +31,10 @@ export async function resolveRemoteImport({ url, version, context }: RemoteImpor
     }
     const component = await resolveComponent(componentOptions)
     if (component) {
-      return { components: { [resolvedUrl]: component } }
+      return {
+        components: { [resolvedUrl]: component },
+        componentStrings: { [resolvedUrl]: `import('${resolvedUrl}').then(m => m.default)` }
+      }
     }
 
     // Try resolving as layout
@@ -42,7 +45,10 @@ export async function resolveRemoteImport({ url, version, context }: RemoteImpor
     }
     const layout = await resolveLayout(layoutOptions)
     if (layout) {
-      return { layout: resolvedUrl }
+      return {
+        layout,
+        layoutString: `import('${resolvedUrl}').then(m => m.default)`
+      }
     }
 
     return null
