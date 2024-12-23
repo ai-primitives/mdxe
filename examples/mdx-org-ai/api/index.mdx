@@ -5,8 +5,7 @@ name: Example API
 version: 1.0.0
 ---
 
-export layout from 'https://esm.sh/@mdxui/api/docs'
-export components from 'https://esm.sh/@mdxui/shadcn'
+export const fetch = request => Response.json({ message: 'Hello World' })
 
 # API Documentation
 
