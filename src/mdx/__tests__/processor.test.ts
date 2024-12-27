@@ -33,7 +33,7 @@ layout: '@layouts/blog/simple'
 
     ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce({
       components: { Button: () => null },
-      componentStrings: { Button: `import('https://esm.sh/@mdxui/docs/components/Button').then(m => m.default)` }
+      componentStrings: { Button: `import('https://esm.sh/@mdxui/docs/components/Button').then(m => m.default)` },
     })
     ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function Button() {}')
 
@@ -42,17 +42,17 @@ layout: '@layouts/blog/simple'
       content: mockContent,
       components: mockComponents,
       context: 'https://mdx.org.ai/docs',
-      type: 'https://schema.org/BlogPosting'
+      type: 'https://schema.org/BlogPosting',
     })
 
-    expect(result.code).toContain('export { default as Button } from \'https://esm.sh/@mdxui/docs/components/Button\'')
+    expect(result.code).toContain("export { default as Button } from 'https://esm.sh/@mdxui/docs/components/Button'")
     expect(result.yamlld).toEqual({
       $type: 'https://schema.org/BlogPosting',
-      $context: 'https://mdx.org.ai/docs'
+      $context: 'https://mdx.org.ai/docs',
     })
-    expect(resolveRemoteImport).toHaveBeenCalledWith({ 
+    expect(resolveRemoteImport).toHaveBeenCalledWith({
       url: 'react-button',
-      context: 'https://mdx.org.ai/docs'
+      context: 'https://mdx.org.ai/docs',
     })
   })
 
@@ -75,7 +75,7 @@ layout: '@layouts/blog/simple'
 
     ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce({
       layout: () => null,
-      layoutString: `import('https://esm.sh/@mdxui/docs/layouts/blog').then(m => m.default)`
+      layoutString: `import('https://esm.sh/@mdxui/docs/layouts/blog').then(m => m.default)`,
     })
     ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function BlogLayout() {}')
 
@@ -84,17 +84,17 @@ layout: '@layouts/blog/simple'
       content: mockContent,
       layout: mockLayout,
       context: 'https://mdx.org.ai/docs',
-      type: 'https://schema.org/BlogPosting'
+      type: 'https://schema.org/BlogPosting',
     })
 
-    expect(result.code).toContain('export { default as layout } from \'https://esm.sh/@mdxui/docs/layouts/blog\'')
+    expect(result.code).toContain("export { default as layout } from 'https://esm.sh/@mdxui/docs/layouts/blog'")
     expect(result.yamlld).toEqual({
       $type: 'https://schema.org/BlogPosting',
-      $context: 'https://mdx.org.ai/docs'
+      $context: 'https://mdx.org.ai/docs',
     })
-    expect(resolveRemoteImport).toHaveBeenCalledWith({ 
+    expect(resolveRemoteImport).toHaveBeenCalledWith({
       url: '@layouts/blog/simple',
-      context: 'https://mdx.org.ai/docs'
+      context: 'https://mdx.org.ai/docs',
     })
   })
 
@@ -116,7 +116,7 @@ layout: '@layouts/blog/simple'
 
     ;(resolveRemoteImport as MockedFunction<typeof resolveRemoteImport>).mockResolvedValueOnce({
       layout: () => null,
-      layoutString: `import('https://esm.sh/@mdxui/docs/layouts/blog').then(m => m.default)`
+      layoutString: `import('https://esm.sh/@mdxui/docs/layouts/blog').then(m => m.default)`,
     })
     ;(fetchRemoteComponent as MockedFunction<typeof fetchRemoteComponent>).mockResolvedValueOnce('export default function BlogLayout() {}')
 
@@ -124,17 +124,17 @@ layout: '@layouts/blog/simple'
       filepath: 'test.mdx',
       content: mockContent,
       context: 'https://mdx.org.ai/docs',
-      type: 'https://schema.org/BlogPosting'
+      type: 'https://schema.org/BlogPosting',
     })
 
-    expect(result.code).toContain('export { default as layout } from \'https://esm.sh/@mdxui/docs/layouts/blog\'')
+    expect(result.code).toContain("export { default as layout } from 'https://esm.sh/@mdxui/docs/layouts/blog'")
     expect(result.yamlld).toEqual({
       $type: 'https://schema.org/BlogPosting',
-      $context: 'https://mdx.org.ai/docs'
+      $context: 'https://mdx.org.ai/docs',
     })
-    expect(resolveRemoteImport).toHaveBeenCalledWith({ 
+    expect(resolveRemoteImport).toHaveBeenCalledWith({
       url: 'https://schema.org/BlogPosting',
-      context: 'https://mdx.org.ai/docs'
+      context: 'https://mdx.org.ai/docs',
     })
   })
 })

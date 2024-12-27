@@ -14,14 +14,14 @@ function createLogger(prefix: string) {
 const log = {
   watcher: createLogger('WATCHER'),
   fs: createLogger('FS'),
-  cli: createLogger('CLI')
+  cli: createLogger('CLI'),
 }
 
 // Import package.json with type assertion for ESM compatibility
 const pkg = {
   default: {
-    version: process.env.npm_package_version || '0.0.0'
-  }
+    version: process.env.npm_package_version || '0.0.0',
+  },
 }
 
 const explorer = cosmiconfig('mdxe')
@@ -94,7 +94,7 @@ async function processMDXFile(filepath: string, config: MDXEConfig) {
 export function parseArgs(args: string[]): { options: CliOptions; remainingArgs: string[] } {
   const options: CliOptions = {
     version: false,
-    help: false
+    help: false,
   }
   const remainingArgs: string[] = []
 
@@ -208,10 +208,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     }
 
     const isDirectory = statSync(watchTarget).isDirectory()
-    const patterns = isDirectory ? 
-      [`${watchTarget}/**/*.mdx`, `${watchTarget}/**/*.md`] : 
-      [watchTarget]
-    
+    const patterns = isDirectory ? [`${watchTarget}/**/*.mdx`, `${watchTarget}/**/*.md`] : [watchTarget]
+
     // Resolve absolute paths and validate
     const absolutePatterns = patterns.map((p) => {
       const resolved = resolve(process.cwd(), p)
@@ -220,7 +218,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
     })
 
     // Validate paths before watching
-    absolutePatterns.forEach(pattern => {
+    absolutePatterns.forEach((pattern) => {
       const baseDir = pattern.includes('*') ? dirname(pattern) : pattern
       if (!existsSync(baseDir)) {
         log.watcher(`Warning: Base directory ${baseDir} does not exist`)
@@ -229,7 +227,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
     log.watcher(`Starting watcher with patterns: ${JSON.stringify(absolutePatterns)}`)
     log.watcher(`Current working directory: ${process.cwd()}`)
-    
+
     const watchOptions = {
       ignored: typeof config.watch === 'object' ? config.watch.ignore : undefined,
       persistent: true,
@@ -237,24 +235,24 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
       cwd: process.cwd(),
       usePolling: false,
       awaitWriteFinish: {
-        stabilityThreshold: 300,  // Wait for writes to finish
-        pollInterval: 100        // Check every 100ms
+        stabilityThreshold: 300, // Wait for writes to finish
+        pollInterval: 100, // Check every 100ms
       },
-      interval: 100,            // Standard polling interval
-      binaryInterval: 300,      // Standard binary polling
-      alwaysStat: true,        // Get detailed file stats
-      atomic: true,            // Enable atomic writes detection
+      interval: 100, // Standard polling interval
+      binaryInterval: 300, // Standard binary polling
+      alwaysStat: true, // Get detailed file stats
+      atomic: true, // Enable atomic writes detection
       ignorePermissionErrors: true,
-      followSymlinks: true,    // Follow symlinks
-      depth: undefined,        // Watch all subdirectories
-      disableGlobbing: false   // Enable globbing for pattern matching
+      followSymlinks: true, // Follow symlinks
+      depth: undefined, // Watch all subdirectories
+      disableGlobbing: false, // Enable globbing for pattern matching
     }
-    
+
     log.watcher('Initializing watcher with options:', watchOptions)
-    
+
     log.watcher(`Watch options: ${JSON.stringify(watchOptions, null, 2)}`)
     const watcher = watch(absolutePatterns, watchOptions)
-    
+
     // Set up debug logging for all watcher events
     const debugEvent = (event: string, path?: string) => {
       const msg = `[DEBUG] Watcher event: ${event}${path ? ` - ${path}` : ''}`
@@ -264,7 +262,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
     // Set up all event handlers immediately with debug logging
     watcher
-      .on('add', path => debugEvent('add', path))
+      .on('add', (path) => debugEvent('add', path))
       .on('change', async (path) => {
         debugEvent('change', path)
         try {
@@ -276,9 +274,9 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
           process.stdout.write(`Error processing file: ${path} - ${error}\n`)
         }
       })
-      .on('unlink', path => debugEvent('unlink', path))
-      .on('addDir', path => debugEvent('addDir', path))
-      .on('unlinkDir', path => debugEvent('unlinkDir', path))
+      .on('unlink', (path) => debugEvent('unlink', path))
+      .on('addDir', (path) => debugEvent('addDir', path))
+      .on('unlinkDir', (path) => debugEvent('unlinkDir', path))
       .on('error', (error) => {
         debugEvent('error')
         log.watcher('Watcher error:', error)
@@ -320,7 +318,7 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
           ctime: stats.ctime,
           mode: stats.mode,
           uid: stats.uid,
-          gid: stats.gid
+          gid: stats.gid,
         })
       } catch (error) {
         log.fs(`Error getting stats for ${filePath}:`, error)

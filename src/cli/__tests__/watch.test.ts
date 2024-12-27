@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { setTimeout, clearTimeout } from 'node:timers'
 import { spawn } from 'child_process'
 import { join, resolve } from 'path'
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch } from 'fs'
+import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, watch, openSync, fsyncSync, closeSync } from 'fs'
 import { sleep, debug } from '../../test/setup.js'
 
 interface ProcessState {
@@ -22,7 +22,7 @@ const createProcessState = (): ProcessState => ({
   lastOutput: '',
   hasProcessedFile: false,
   hasProcessedFiles: false,
-  fileWatcher: null
+  fileWatcher: null,
 })
 
 let processState: ProcessState = createProcessState()
@@ -30,7 +30,7 @@ let processState: ProcessState = createProcessState()
 const log = {
   test: (msg: string, ...args: unknown[]) => debug(`[TEST] ${msg}`, ...args),
   fs: (msg: string, ...args: unknown[]) => debug(`[FS] ${msg}`, ...args),
-  proc: (msg: string, ...args: unknown[]) => debug(`[PROC] ${msg}`, ...args)
+  proc: (msg: string, ...args: unknown[]) => debug(`[PROC] ${msg}`, ...args),
 }
 
 describe('Watch Mode', () => {
@@ -94,7 +94,7 @@ Initial content for page 2
             debug('Error killing watch process:', error)
             resolve()
           }
-        })
+        }),
       )
     }
 
@@ -111,7 +111,7 @@ Initial content for page 2
             debug('Error closing file watcher:', error)
           }
           resolve()
-        })
+        }),
       )
     }
 
@@ -126,13 +126,13 @@ Initial content for page 2
           debug('Error removing test directory:', error)
         }
         resolve()
-      })
+      }),
     )
 
     // Wait for all cleanup tasks to complete
     await Promise.all(cleanupTasks)
     debug('Cleanup completed')
-    
+
     // Reset process state
     processState = createProcessState()
   })
@@ -146,14 +146,14 @@ Initial content for page 2
     debug('Test directory path:', testDir)
     debug('Absolute file path:', absolutePath)
     debug('Current working directory:', process.cwd())
-    
+
     // Create initial file with synchronous operations and proper error handling
     try {
       debug('Creating initial file...')
       const initialContent = `# Initial Test\nThis is a test file.\n`
-      writeFileSync(absolutePath, initialContent, { 
+      writeFileSync(absolutePath, initialContent, {
         encoding: 'utf-8',
-        flag: 'w'
+        flag: 'w',
       })
       debug('Initial file write completed')
 
@@ -177,7 +177,7 @@ Initial content for page 2
         mode: stats.mode,
         uid: stats.uid,
         gid: stats.gid,
-        mtime: stats.mtime
+        mtime: stats.mtime,
       })
     } catch (error) {
       debug('Error in file creation/verification:', error)
@@ -199,10 +199,10 @@ Initial content for page 2
         DEBUG: 'mdxe:*',
         FORCE_COLOR: '0',
         NODE_ENV: 'test',
-        NODE_DEBUG: 'fs,watch'
+        NODE_DEBUG: 'fs,watch',
       } as NodeJS.ProcessEnv,
       windowsHide: true,
-      shell: false
+      shell: false,
     })
     log.proc('Started watch process:', { pid: watchProcess.pid })
 
@@ -213,17 +213,17 @@ Initial content for page 2
 
     // Store stream references to avoid null checks
     const stdout = watchProcess.stdout
-    
+
     stdout.on('data', (data) => {
       const output = data.toString()
       processState.lastOutput = output
       debug('Watch process output:', output)
-      
+
       if (output.includes('Initial scan complete')) {
         processState.ready = true
         debug('Watch process ready')
       }
-      
+
       if (output.includes('Processing file:') || output.includes('File changed:') || output.includes('Watch target:')) {
         processState.changed = true
         processState.hasProcessedFile = true
@@ -242,14 +242,14 @@ Initial content for page 2
 
     // Wait for watcher to be ready with enhanced logging
     debug('Waiting for watcher to be ready...')
-    
+
     await new Promise<void>((resolve, reject) => {
       const startTime = Date.now()
       const state = {
         readyReceived: false,
-        changeReceived: false
+        changeReceived: false,
       }
-      
+
       const debugState = () => ({
         elapsedMs: Date.now() - startTime,
         processState: {
@@ -257,14 +257,14 @@ Initial content for page 2
           exitCode: watchProcess?.exitCode,
           pid: watchProcess?.pid,
           env: process.env.NODE_DEBUG,
-          cwd: process.cwd()
+          cwd: process.cwd(),
         },
         fileState: {
           exists: existsSync(absolutePath),
           content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND',
-          stats: existsSync(absolutePath) ? statSync(absolutePath) : null
+          stats: existsSync(absolutePath) ? statSync(absolutePath) : null,
         },
-        watcherState: state
+        watcherState: state,
       })
 
       let timeoutId: NodeJS.Timeout
@@ -278,17 +278,17 @@ Initial content for page 2
       const handleOutput = (data: Buffer) => {
         const output = data.toString()
         debug('Received output:', output)
-        
+
         if (output.includes('Initial scan complete')) {
           state.readyReceived = true
           debug('Ready event received')
         }
-        
+
         if (output.includes('File changed:')) {
           state.changeReceived = true
           debug('Change event received')
         }
-        
+
         if (state.readyReceived && state.changeReceived) {
           debug('All required events received:', debugState())
           cleanup()
@@ -312,7 +312,7 @@ Initial content for page 2
         reject(new Error('Watch process stdout not available'))
       }
     })
-    
+
     await sleep(1000)
 
     debug('Starting file modification process...')
@@ -325,35 +325,35 @@ Initial content for page 2
 
       const timestamp = Date.now()
       const newContent = `# Modified Content ${timestamp}\nThis is the updated content.\n`
-      
+
       // Get original file stats
       const originalStats = statSync(absolutePath)
       debug('Original file stats:', {
         size: originalStats.size,
         mode: originalStats.mode,
-        mtime: originalStats.mtime
+        mtime: originalStats.mtime,
       })
 
       // Write content with atomic operation
       debug('Writing new content...')
-      writeFileSync(absolutePath, newContent, { 
+      writeFileSync(absolutePath, newContent, {
         encoding: 'utf-8',
         flag: 'w',
-        mode: originalStats.mode // Preserve file permissions
+        mode: originalStats.mode, // Preserve file permissions
       })
       debug('Content write operation completed')
-      
+
       // Force sync to ensure changes are written to disk
-      const fd = require('fs').openSync(absolutePath, 'r')
-      require('fs').fsyncSync(fd)
-      require('fs').closeSync(fd)
+      const fd = openSync(absolutePath, 'r')
+      fsyncSync(fd)
+      closeSync(fd)
       debug('File sync completed')
-      
+
       // Verify content with retries
       let verifyContent
       let retryCount = 0
       const maxRetries = 3
-      
+
       while (retryCount < maxRetries) {
         verifyContent = readFileSync(absolutePath, 'utf-8')
         if (verifyContent === newContent) {
@@ -364,21 +364,20 @@ Initial content for page 2
         retryCount++
         await sleep(100) // Short delay between retries
       }
-      
+
       if (verifyContent !== newContent) {
         debug('Final content verification failed')
         debug('Expected:', newContent)
         debug('Actual:', verifyContent)
         throw new Error('File content verification failed after retries')
       }
-      
-      
+
       const newStats = statSync(absolutePath)
       debug('File modification completed. New stats:', {
         size: newStats.size,
         mode: newStats.mode,
         mtime: newStats.mtime,
-        mtimeMs: newStats.mtimeMs - originalStats.mtimeMs + 'ms since original'
+        mtimeMs: newStats.mtimeMs - originalStats.mtimeMs + 'ms since original',
       })
     } catch (error) {
       debug('Error in file modification process:', error)
@@ -390,7 +389,7 @@ Initial content for page 2
     // Wait for change event with timeout matching global vitest config
     const timeout = 120000
     const startTime = Date.now()
-    
+
     // Enhanced waiting logic with file system event verification
     while (!processState.hasProcessedFile && Date.now() - startTime < timeout) {
       await sleep(100)
@@ -406,7 +405,7 @@ Initial content for page 2
         debug('Error reading file during wait:', error)
       }
     }
-    
+
     if (!processState.hasProcessedFile) {
       debug('Timeout or failure occurred:', {
         elapsed: Date.now() - startTime,
@@ -414,13 +413,13 @@ Initial content for page 2
         watcherActive: !!watchProcess && !watchProcess.killed,
         fileState: {
           exists: existsSync(absolutePath),
-          content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND'
+          content: existsSync(absolutePath) ? readFileSync(absolutePath, 'utf-8') : 'FILE_NOT_FOUND',
         },
         processState: {
           killed: watchProcess?.killed,
           exitCode: watchProcess?.exitCode,
-          pid: watchProcess?.pid
-        }
+          pid: watchProcess?.pid,
+        },
       })
     }
 
@@ -444,9 +443,9 @@ Initial content for page 2
         DEBUG: '*',
         FORCE_COLOR: '0',
         NODE_ENV: 'test',
-        NODE_DEBUG: 'fs,watch,stream'
+        NODE_DEBUG: 'fs,watch,stream',
       } as NodeJS.ProcessEnv,
-      windowsHide: true
+      windowsHide: true,
     })
     log.proc('Started watch process:', { pid: watchProcess.pid })
 
@@ -462,12 +461,12 @@ Initial content for page 2
       const output = data.toString()
       processState.lastOutput = output
       debug('Watch process output:', output)
-      
+
       if (output.includes('Initial scan complete')) {
         processState.ready = true
         debug('Watch process ready')
       }
-      
+
       if (output.includes('has been changed') || output.includes('Successfully processed file:')) {
         processState.changed = true
         processState.hasProcessedFiles = true
@@ -484,7 +483,7 @@ Initial content for page 2
     })
 
     debug('Waiting for initial processing...')
-    
+
     // Wait for the "Initial scan complete" message before proceeding
     await new Promise<void>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
@@ -493,13 +492,12 @@ Initial content for page 2
           processState: {
             killed: watchProcess?.killed,
             exitCode: watchProcess?.exitCode,
-            pid: watchProcess?.pid
+            pid: watchProcess?.pid,
           },
           directoryState: {
             exists: existsSync(multiDir),
-            files: existsSync(multiDir) ? 
-              readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'DIR_NOT_FOUND'
-          }
+            files: existsSync(multiDir) ? readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'DIR_NOT_FOUND',
+          },
         })
         reject(new Error('Timeout waiting for watcher to be ready'))
       }, 30000)
@@ -523,20 +521,20 @@ Initial content for page 2
     try {
       const timestamp = Date.now()
       const page1Content = `# Modified Page 1 ${timestamp}\nThis is an updated test file.\n`
-      
+
       // Write content with atomic operation
       writeFileSync(join(multiDir, 'page1.mdx'), page1Content, { encoding: 'utf-8', flag: 'w' })
       debug('Content written to page1.mdx')
-      
+
       debug('Adding page3.mdx...')
       const page3Content = `# Page 3 ${timestamp}\nThis is a new test file.\n`
       writeFileSync(join(multiDir, 'page3.mdx'), page3Content, { encoding: 'utf-8', flag: 'w' })
       debug('Content written to page3.mdx')
-      
+
       // Verify content
       const verifyPage1 = readFileSync(join(multiDir, 'page1.mdx'), 'utf-8')
       const verifyPage3 = readFileSync(join(multiDir, 'page3.mdx'), 'utf-8')
-      
+
       if (verifyPage1 !== page1Content || verifyPage3 !== page3Content) {
         debug('File content verification failed')
         debug('Expected page1:', page1Content)
@@ -545,11 +543,11 @@ Initial content for page 2
         debug('Actual page3:', verifyPage3)
         throw new Error('File content verification failed')
       }
-      
+
       debug('File modifications completed and verified')
       debug('Directory contents:', {
         page1: verifyPage1,
-        page3: verifyPage3
+        page3: verifyPage3,
       })
     } catch (error) {
       debug('Error modifying files:', error)
@@ -560,7 +558,7 @@ Initial content for page 2
     // Wait for change event with timeout matching global vitest config
     const timeout = 120000
     const startTime = Date.now()
-    
+
     // Enhanced waiting logic with file system event verification
     while (!processState.hasProcessedFiles && Date.now() - startTime < timeout) {
       await sleep(100)
@@ -573,14 +571,14 @@ Initial content for page 2
         const currentState = {
           page1: existsSync(join(multiDir, 'page1.mdx')) ? readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
           page2: existsSync(join(multiDir, 'page2.mdx')) ? readFileSync(join(multiDir, 'page2.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
-          page3: existsSync(join(multiDir, 'page3.mdx')) ? readFileSync(join(multiDir, 'page3.mdx'), 'utf-8') : 'FILE_NOT_FOUND'
+          page3: existsSync(join(multiDir, 'page3.mdx')) ? readFileSync(join(multiDir, 'page3.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
         }
         debug('Current directory state:', currentState)
       } catch (error) {
         debug('Error reading directory during wait:', error)
       }
     }
-    
+
     if (!processState.hasProcessedFiles) {
       debug('Timeout or failure occurred:', {
         elapsed: Date.now() - startTime,
@@ -591,18 +589,17 @@ Initial content for page 2
           files: {
             page1: existsSync(join(multiDir, 'page1.mdx')) ? readFileSync(join(multiDir, 'page1.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
             page2: existsSync(join(multiDir, 'page2.mdx')) ? readFileSync(join(multiDir, 'page2.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
-            page3: existsSync(join(multiDir, 'page3.mdx')) ? readFileSync(join(multiDir, 'page3.mdx'), 'utf-8') : 'FILE_NOT_FOUND'
-          }
+            page3: existsSync(join(multiDir, 'page3.mdx')) ? readFileSync(join(multiDir, 'page3.mdx'), 'utf-8') : 'FILE_NOT_FOUND',
+          },
         },
         processState: {
           killed: watchProcess?.killed,
           exitCode: watchProcess?.exitCode,
-          pid: watchProcess?.pid
-        }
+          pid: watchProcess?.pid,
+        },
       })
     }
 
     expect(processState.changed).toBe(true)
   })
-
 })
