@@ -5,14 +5,17 @@ export interface MDXEConfig {
   /** MDX compilation options */
   mdxOptions?: CompileOptions
   /** Watch mode configuration */
-  watch?: boolean | string | {
-    /** Enable watch mode */
-    enabled?: boolean
-    /** Patterns to ignore */
-    ignore?: string[]
-    /** Target file or directory to watch */
-    target?: string
-  }
+  watch?:
+    | boolean
+    | string
+    | {
+        /** Enable watch mode */
+        enabled?: boolean
+        /** Patterns to ignore */
+        ignore?: string[]
+        /** Target file or directory to watch */
+        target?: string
+      }
   /** Component import configuration */
   imports?: {
     /** Base URL for remote imports (e.g., 'https://esm.sh/') */

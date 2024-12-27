@@ -1,18 +1,23 @@
-import type { ComponentType } from 'react'
-import type { ComponentResolutionOptions, LayoutResolutionOptions } from 'next-mdxld'
+import type { ReactElement } from 'react'
 
-export interface RemoteImportOptions extends Partial<ComponentResolutionOptions>, Partial<LayoutResolutionOptions> {
-  url: string;
-  version?: string;
-  context?: string;
+export interface RemoteImportOptions {
+  url: string
+  version?: string
+  context?: string
+  components?: {
+    path?: string
+    props?: Record<string, unknown>
+  }
+  layout?: {
+    path?: string
+    props?: Record<string, unknown>
+  }
 }
 
 export interface RemoteImportResult {
-  layout?: ComponentType;
-  components?: Record<string, ComponentType>;
-  layoutString?: string;
-  componentStrings?: Record<string, string>;
+  url?: string
+  components?: Record<string, () => ReactElement>
+  componentStrings?: Record<string, string>
+  layout?: () => ReactElement
+  layoutString?: string
 }
-
-// Re-export next-mdxld types for convenience
-export type { ComponentResolutionOptions, LayoutResolutionOptions };

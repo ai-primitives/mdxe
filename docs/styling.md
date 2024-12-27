@@ -16,9 +16,10 @@ This content will automatically receive Tailwind Typography styling.
 - And appropriate markers
 ```
 
-## Integration with next-mdxld
+## Next.js Integration
 
-For Next.js projects, use [next-mdxld](https://github.com/ai-primitives/next-mdxld) which provides full MDX-LD support with the same styling capabilities.
+
+For Next.js projects, please use [next-mdxld](https://github.com/ai-primitives/next-mdxld) instead. It provides full Next.js integration with MDX-LD support and the same styling capabilities.
 
 ### Style Configuration
 

@@ -3,7 +3,7 @@
 [![npm version](https://badge.fury.io/js/mdxe.svg)](https://www.npmjs.com/package/mdxe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Zero-config MDX processor with standalone CLI mode and MDX-LD support. For Next.js projects, use [next-mdxld](https://github.com/ai-primitives/next-mdxld) which provides full MDX-LD integration. Currently in active development.
+Zero-config MDX processor with standalone CLI mode and MDX-LD support. For Next.js integration, please use [next-mdxld](https://github.com/ai-primitives/next-mdxld) instead. Currently in active development.
 
 ## Features
 
@@ -12,7 +12,6 @@ Current and Planned Features:
 - 🚀 Zero-config MDX processing (in development)
 - 📦 Layout and component exports (in development)
 - 🎨 Default Tailwind Typography styling (in development)
-- 🔄 File watching and hot reload (in development)
 - 🌐 Remote component imports (esm.sh) (in development)
 - 🤖 AI-powered content generation (planned)
 

@@ -1,10 +1,11 @@
 import { createHash } from 'crypto'
+import React from 'react'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
-
-import { resolveComponent, resolveLayout } from 'next-mdxld'
-import type { ComponentResolutionOptions, LayoutResolutionOptions, RemoteImportOptions, RemoteImportResult } from '../types/remote.js'
+import fetch from 'node-fetch'
+// Import only the types we need
+import type { RemoteImportOptions, RemoteImportResult } from '../types/remote.js'
 
 const CACHE_DIR = path.join(os.tmpdir(), 'mdxe-remote-cache')
 const FILE_EXTENSIONS = ['.tsx', '.jsx', '.ts', '.js']
@@ -12,10 +13,14 @@ const ALLOWED_DOMAINS = ['esm.sh', 'cdn.skypack.dev', 'unpkg.com']
 
 export async function resolveRemoteImport({ url, version, context }: RemoteImportOptions): Promise<RemoteImportResult | null> {
   try {
+    if (!url) {
+      return null
+    }
+
     // Validate URL domain if it's a full URL
     if (url.startsWith('http')) {
       const urlObj = new URL(url)
-      if (!ALLOWED_DOMAINS.some(domain => urlObj.hostname === domain)) {
+      if (!ALLOWED_DOMAINS.some((domain) => urlObj.hostname === domain)) {
         throw new Error(`Domain ${urlObj.hostname} not allowed for remote imports`)
       }
     }
@@ -23,35 +28,35 @@ export async function resolveRemoteImport({ url, version, context }: RemoteImpor
     // Convert package name to esm.sh URL if needed
     const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}${version ? `@${version}` : ''}`
 
-    // Attempt to resolve as component first
-    const componentOptions: ComponentResolutionOptions = {
-      type: resolvedUrl,
-      context,
-      components: {}
+    // Try to fetch and analyze the content
+    const response = await fetch(resolvedUrl)
+    if (!response.ok) {
+      console.warn(`Failed to resolve remote import: ${resolvedUrl}`)
+      return null
     }
-    const component = await resolveComponent(componentOptions)
-    if (component) {
-      return {
-        components: { [resolvedUrl]: component },
-        componentStrings: { [resolvedUrl]: `import('${resolvedUrl}').then(m => m.default)` }
+
+    const content = await response.text()
+
+    // Check if it's a component or layout
+    if (content.includes('export default')) {
+      const importStr = `import('${resolvedUrl}').then(m => m.default)`
+      if (context?.includes('layouts')) {
+        return {
+          layout: () => React.createElement('div'),
+          layoutString: importStr,
+          url: resolvedUrl,
+        }
+      } else {
+        const name = path.basename(url).replace(/\.[^/.]+$/, '')
+        return {
+          components: { [name]: () => React.createElement('div') },
+          componentStrings: { [name]: importStr },
+          url: resolvedUrl,
+        }
       }
     }
 
-    // Try resolving as layout
-    const layoutOptions: LayoutResolutionOptions = {
-      type: resolvedUrl,
-      context,
-      layouts: {}
-    }
-    const layout = await resolveLayout(layoutOptions)
-    if (layout) {
-      return {
-        layout,
-        layoutString: `import('${resolvedUrl}').then(m => m.default)`
-      }
-    }
-
-    return null
+    return { url: resolvedUrl }
   } catch (error) {
     console.error('Failed to resolve remote import:', error)
     return null
@@ -80,7 +85,7 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
     // Validate URL domain for remote components
     if (url.startsWith('http')) {
       const urlObj = new URL(url)
-      if (!ALLOWED_DOMAINS.some(domain => urlObj.hostname === domain)) {
+      if (!ALLOWED_DOMAINS.some((domain) => urlObj.hostname === domain)) {
         throw new Error(`Domain ${urlObj.hostname} not allowed for remote imports`)
       }
     }
@@ -92,14 +97,29 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
     const cacheKey = createHash('sha256').update(url).digest('hex')
     const cachePath = path.join(CACHE_DIR, `${cacheKey}.js`)
 
+    // Check cache first
     try {
-      // Check cache first
       const stats = await fs.stat(cachePath)
       const cacheAge = Date.now() - stats.mtimeMs
 
-      // Cache is valid for 24 hours
-      if (cacheAge < 24 * 60 * 60 * 1000) {
-        return await fs.readFile(cachePath, 'utf-8')
+      // Cache is valid for 24 hours and must have content
+      if (cacheAge < 24 * 60 * 60 * 1000 && stats.size > 0) {
+        const content = await fs.readFile(cachePath, 'utf-8')
+        // If cache is stale but still valid, trigger a background refresh
+        if (cacheAge > 23 * 60 * 60 * 1000) {
+          void globalThis
+            .fetch(url)
+            .then(async (response) => {
+              if (response.ok) {
+                const content = await response.text()
+                await fs.writeFile(cachePath, content, 'utf-8')
+              }
+            })
+            .catch(() => {
+              /* ignore background fetch errors */
+            })
+        }
+        return content
       }
     } catch {
       // Cache miss or error, proceed with fetch
@@ -108,28 +128,29 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
     // Convert package name to esm.sh URL if needed
     const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}`
 
-    // Try resolving through next-mdxld first
-    const result = await resolveRemoteImport({ url: resolvedUrl })
-    if (result?.components || result?.layout) {
-      // Component or layout found through next-mdxld
-      return JSON.stringify(result)
+    try {
+      const response = await globalThis.fetch(resolvedUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch component from ${resolvedUrl}`)
+      }
+
+      const content = await response.text()
+
+      // Cache the content
+      await fs.writeFile(cachePath, content, 'utf-8')
+
+      return content
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to fetch component from ${resolvedUrl}: ${error.message}`)
+      }
+      throw new Error(`Failed to fetch component from ${resolvedUrl}`)
     }
-
-    // Fallback to direct fetch if not found through next-mdxld
-    const response = await fetch(resolvedUrl)
-    if (!response.ok) {
-      throw new Error(`Failed to fetch component from ${resolvedUrl}: ${response.statusText}`)
-    }
-
-    const content = await response.text()
-
-
-    // Cache the content
-    await fs.writeFile(cachePath, content, 'utf-8')
-
-    return content
   } catch (error) {
     console.error('Failed to fetch remote component:', error)
-    throw error
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch component from ${url}: ${error.message}`)
+    }
+    throw new Error(`Failed to fetch component from ${url}`)
   }
 }

@@ -56,6 +56,22 @@
 
 ## Blockers
 
+### Deprecated Dependencies
+
+- [ ] Resolve mdast@3.0.0 dependency warning
+  - **Description**: The mdast@3.0.0 package appears as a deprecated sub-dependency
+  - **Impact**: While not causing immediate issues, this deprecated dependency could cause problems in future updates
+  - **Dependencies Affected**: 
+    - next-mdxld (includes mdast as sub-dependency)
+    - remark-frontmatter
+  - **Reproduction Steps**:
+    1. Run `pnpm install` in the project root
+    2. Observe warning: `WARN  1 deprecated subdependencies found: mdast@3.0.0`
+  - **Required Actions**:
+    - Document issue in next-mdxld repository
+    - Monitor for updates to mdast package
+    - Plan migration strategy if deprecation becomes critical
+
 ### Pre-existing Lint Issues
 
 The following lint issues exist in the codebase but are unrelated to recent changes:
@@ -101,18 +117,21 @@ These test failures are pre-existing infrastructure issues and do not indicate p
 The following issues are currently blocking CI builds in PR #17:
 
 1. Environment Standardization:
+
    - Node.js Version: Updated package.json to require >=20.18.1
    - CI Environment: Running on ubuntu-24.04 (upcoming upgrade)
    - Local Development: Currently on Node.js v22.11.0
    - Action Taken: Added engines field to enforce version compatibility
 
 2. Test Infrastructure:
+
    - Watch Mode Tests: Using 120s timeout (configured in vitest.config.ts)
    - Test Files: Added required YAML-LD frontmatter to all test MDX files
    - Hook Timeout: Set to 120s for setup/teardown operations
    - State Management: Improved process state tracking in watch tests
 
 3. Module Resolution:
+
    - Error: Cannot find module 'next-mdxld/dist/components'
    - Error: Cannot find module 'remark-mdxld/dist/yaml-ld'
    - Impact: Test failures in remote.test.ts, processor.test.ts, and watch.test.ts
@@ -123,9 +142,10 @@ The following issues are currently blocking CI builds in PR #17:
      - Add proper error handling for missing modules
      - Investigate remark-mdxld package structure and yaml-ld module location
 
-2. Previous Issues:
+4. Previous Issues:
 
-1. YAML-LD Property Requirements:
+5. YAML-LD Property Requirements:
+
    - Error: "Missing required frontmatter" from remark-mdxld
    - Impact: Test failures in processor.test.ts
    - Required Properties:
@@ -135,7 +155,8 @@ The following issues are currently blocking CI builds in PR #17:
      - mdxe: Blocking CI builds
      - next-mdxld: Needs documentation update for required fields
 
-2. Watch Mode Test Failures:
+6. Watch Mode Test Failures:
+
    - Error: "Timeout waiting for watcher to be ready"
    - Location: watch.test.ts:302:16 and watch.test.ts:504:16
    - Impact: Test failures in PR #17
@@ -151,7 +172,7 @@ The following issues are currently blocking CI builds in PR #17:
      - [ ] Add proper watcher initialization checks
      - [ ] Implement retry mechanism for flaky tests
 
-3. Type Definition Issues:
+7. Type Definition Issues:
    - File: `src/mdx/processor.ts`
    - Active Issues:
      - Property '$type' does not exist on type '{}'
@@ -162,6 +183,7 @@ The following issues are currently blocking CI builds in PR #17:
      - Using $ prefix as per W3C YAML-LD specification
 
 To reproduce:
+
 1. Run `pnpm install`
 2. Run `pnpm test`
 3. Observe errors:
@@ -182,7 +204,6 @@ The following environment differences have been identified between local and CI:
    - CI: Node.js v20.18.1, npm 10.8.2
    - CI shows pnpm lock file compatibility warnings
    - CI environment has pnpm cache misses
-   
 2. Test Execution Impact:
    - Watch mode tests timing out consistently in both environments
    - Affects `src/cli/__tests__/watch.test.ts`:
