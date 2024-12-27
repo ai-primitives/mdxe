@@ -16,17 +16,17 @@ vi.mock('fs', () => ({
 describe('resolveRemoteImport', () => {
   it('should return existing esm.sh URLs unchanged', async () => {
     const url = 'https://esm.sh/react@18.2.0'
-    expect(await resolveRemoteImport({ url })).toBe(url)
+    expect(await resolveRemoteImport({ url })).toEqual({ url })
   })
 
   it('should convert package names to esm.sh URLs', async () => {
     const result = await resolveRemoteImport({ url: 'react', version: '18.2.0' })
-    expect(result).toBe('https://esm.sh/react@18.2.0')
+    expect(result).toEqual({ url: 'https://esm.sh/react@18.2.0' })
   })
 
   it('should handle scoped packages', async () => {
     const result = await resolveRemoteImport({ url: '@mdx-js/react' })
-    expect(result).toBe('https://esm.sh/@mdx-js/react')
+    expect(result).toEqual({ url: 'https://esm.sh/@mdx-js/react' })
   })
 })
 

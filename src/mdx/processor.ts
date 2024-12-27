@@ -51,9 +51,11 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
         await fetchRemoteComponent(url)
         processedCode = `export { default as ${name} } from '${url}'\n${processedCode}`
       } else if (typeof url === 'string') {
-        const resolvedUrl = await resolveRemoteImport({ url, context })
-        if (resolvedUrl) {
-          processedCode = `export { default as ${name} } from '${resolvedUrl}'\n${processedCode}`
+        const result = await resolveRemoteImport({ url, context })
+        if (result?.componentStrings?.[name]) {
+          processedCode = `export const ${name} = ${result.componentStrings[name]}\n${processedCode}`
+        } else if (result?.url) {
+          processedCode = `export { default as ${name} } from '${result.url}'\n${processedCode}`
         }
       }
     }
@@ -61,17 +63,21 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
 
   // Process remote layout with ESM export
   if (options.layout && typeof options.layout === 'string') {
-    const resolvedUrl = await resolveRemoteImport({ url: options.layout, context })
-    if (resolvedUrl) {
-      processedCode = `export { default as layout } from '${resolvedUrl}'\n${processedCode}`
+    const result = await resolveRemoteImport({ url: options.layout, context })
+    if (result?.layoutString) {
+      processedCode = `export const layout = ${result.layoutString}\n${processedCode}`
+    } else if (result?.url) {
+      processedCode = `export { default as layout } from '${result.url}'\n${processedCode}`
     }
   }
 
   // Auto-resolve layout based on type if not explicitly provided
   if (!options.layout && type && typeof type === 'string') {
-    const resolvedUrl = await resolveRemoteImport({ url: type, context })
-    if (resolvedUrl) {
-      processedCode = `export { default as layout } from '${resolvedUrl}'\n${processedCode}`
+    const result = await resolveRemoteImport({ url: type, context })
+    if (result?.layoutString) {
+      processedCode = `export const layout = ${result.layoutString}\n${processedCode}`
+    } else if (result?.url) {
+      processedCode = `export { default as layout } from '${result.url}'\n${processedCode}`
     }
   }
 

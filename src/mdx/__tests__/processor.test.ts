@@ -45,7 +45,7 @@ layout: '@layouts/blog/simple'
       type: 'https://schema.org/BlogPosting',
     })
 
-    expect(result.code).toContain("export { default as Button } from 'https://esm.sh/@mdxui/docs/components/Button'")
+    expect(result.code).toContain("export const Button = import('https://esm.sh/@mdxui/docs/components/Button').then(m => m.default)")
     expect(result.yamlld).toEqual({
       $type: 'https://schema.org/BlogPosting',
       $context: 'https://mdx.org.ai/docs',
@@ -87,7 +87,7 @@ layout: '@layouts/blog/simple'
       type: 'https://schema.org/BlogPosting',
     })
 
-    expect(result.code).toContain("export { default as layout } from 'https://esm.sh/@mdxui/docs/layouts/blog'")
+    expect(result.code).toContain("export const layout = import('https://esm.sh/@mdxui/docs/layouts/blog').then(m => m.default)")
     expect(result.yamlld).toEqual({
       $type: 'https://schema.org/BlogPosting',
       $context: 'https://mdx.org.ai/docs',
@@ -127,7 +127,7 @@ layout: '@layouts/blog/simple'
       type: 'https://schema.org/BlogPosting',
     })
 
-    expect(result.code).toContain("export { default as layout } from 'https://esm.sh/@mdxui/docs/layouts/blog'")
+    expect(result.code).toContain("export const layout = import('https://esm.sh/@mdxui/docs/layouts/blog').then(m => m.default)")
     expect(result.yamlld).toEqual({
       $type: 'https://schema.org/BlogPosting',
       $context: 'https://mdx.org.ai/docs',

@@ -27,14 +27,35 @@ export async function resolveRemoteImport({ url, version, context }: RemoteImpor
     // Convert package name to esm.sh URL if needed
     const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}${version ? `@${version}` : ''}`
 
-    // Check if URL is accessible
-    const response = await fetch(resolvedUrl, { method: 'HEAD' })
+    // Try to fetch and analyze the content
+    const response = await fetch(resolvedUrl)
     if (!response.ok) {
       console.warn(`Failed to resolve remote import: ${resolvedUrl}`)
       return null
     }
 
-    return resolvedUrl
+    const content = await response.text()
+    
+    // Check if it's a component or layout
+    if (content.includes('export default')) {
+      const importStr = `import('${resolvedUrl}').then(m => m.default)`
+      if (context?.includes('layouts')) {
+        return {
+          layout: () => null,
+          layoutString: importStr,
+          url: resolvedUrl
+        }
+      } else {
+        const name = path.basename(url).replace(/\.[^/.]+$/, '')
+        return {
+          components: { [name]: () => null },
+          componentStrings: { [name]: importStr },
+          url: resolvedUrl
+        }
+      }
+    }
+
+    return { url: resolvedUrl }
   } catch (error) {
     console.error('Failed to resolve remote import:', error)
     return null
@@ -93,8 +114,8 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
 
     // Resolve the URL through our resolver
     const result = await resolveRemoteImport({ url: resolvedUrl })
-    if (result) {
-      return result
+    if (result?.url) {
+      return result.url
     }
 
     // Fallback to direct fetch if not resolved
