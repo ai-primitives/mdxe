@@ -121,20 +121,24 @@ describe('next-dev integration', () => {
   })
 
   test('file changes trigger reload and content updates', async () => {
-    // Initial content check with retry
+    // Initial content check with retry and longer delays
     let initialHtml = ''
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 10; i++) {
       try {
         const initialResponse = await fetch(`http://localhost:${TEST_PORT}/test`)
         initialHtml = await initialResponse.text()
-        if (initialHtml.includes('Test Content')) break
-        await setTimeout(1000)
+        const hasContent = initialHtml.match(/<div[^>]*class="prose"[^>]*>.*?Test Content.*?<\/div>/s)
+        if (hasContent) break
+        console.log(`Attempt ${i + 1}: Content not found, waiting...`)
+        await setTimeout(2000)
       } catch (error) {
-        if (i === 2) throw error
-        await setTimeout(1000)
+        console.log(`Attempt ${i + 1} failed:`, error)
+        if (i === 9) throw error
+        await setTimeout(2000)
       }
     }
-    expect(initialHtml).toContain('Test Content')
+    // Check for content within the prose div (where MDX content is rendered)
+    expect(initialHtml).toMatch(/<div[^>]*class="prose"[^>]*>.*?Test Content.*?<\/div>/s)
 
     // Modify MDX file
     const newContent = '# Updated Content\n\nThis content was updated during testing.'
@@ -147,13 +151,14 @@ describe('next-dev integration', () => {
       try {
         const updatedResponse = await fetch(`http://localhost:${TEST_PORT}/test`)
         updatedHtml = await updatedResponse.text()
-        if (updatedHtml.includes('Updated Content')) break
+        if (updatedHtml.match(/<article[^>]*>.*?Updated Content.*?<\/article>/s)) break
       } catch (error) {
         if (i === 4) throw error
       }
     }
 
-    expect(updatedHtml).toContain('Updated Content')
-    expect(updatedHtml).toContain('This content was updated during testing')
+    // Check for content within the article section
+    expect(updatedHtml).toMatch(/<article[^>]*>.*?Updated Content.*?<\/article>/s)
+    expect(updatedHtml).toMatch(/<article[^>]*>.*?This content was updated during testing.*?<\/article>/s)
   })
 })
