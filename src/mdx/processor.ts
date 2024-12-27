@@ -37,7 +37,6 @@ export interface ProcessedMDX {
 export async function processMDX(options: MDXProcessorOptions): Promise<ProcessedMDX> {
   const { content = '', context, type } = options
   let processedCode = content
-  let componentExports = ''
   let yamlld: ProcessedMDX['yamlld'] = {
     $type: undefined,
     $context: undefined,
@@ -50,10 +49,12 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
     for (const [name, url] of Object.entries(options.components)) {
       if (typeof url === 'string' && url.startsWith('http')) {
         await fetchRemoteComponent(url)
-        componentExports += `export { default as ${name} } from '${url}';\n`
+        processedCode = `export { default as ${name} } from '${url}'\n${processedCode}`
       } else if (typeof url === 'string') {
         const resolvedUrl = await resolveRemoteImport({ url, context })
-        componentExports += `export { default as ${name} } from '${resolvedUrl}';\n`
+        if (resolvedUrl) {
+          processedCode = `export { default as ${name} } from '${resolvedUrl}'\n${processedCode}`
+        }
       }
     }
   }
@@ -61,14 +62,16 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
   // Process remote layout with ESM export
   if (options.layout && typeof options.layout === 'string') {
     const resolvedUrl = await resolveRemoteImport({ url: options.layout, context })
-    componentExports += `export { default as layout } from '${resolvedUrl}';\n`
+    if (resolvedUrl) {
+      processedCode = `export { default as layout } from '${resolvedUrl}'\n${processedCode}`
+    }
   }
 
   // Auto-resolve layout based on type if not explicitly provided
   if (!options.layout && type && typeof type === 'string') {
     const resolvedUrl = await resolveRemoteImport({ url: type, context })
     if (resolvedUrl) {
-      componentExports += `export { default as layout } from '${resolvedUrl}';\n`
+      processedCode = `export { default as layout } from '${resolvedUrl}'\n${processedCode}`
     }
   }
 
@@ -159,10 +162,10 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
     }
   }
   if (mdxldData.executable) {
-    componentExports +=
-      Object.entries(mdxldData.executable)
-        .map(([name, code]) => `export const ${name} = ${code};`)
-        .join('\n') + '\n'
+    const executableExports = Object.entries(mdxldData.executable)
+      .map(([name, code]) => `export const ${name} = ${code}`)
+      .join('\n')
+    processedCode = `${executableExports}\n${processedCode}`
   }
 
   // Process remote components and layouts from frontmatter
@@ -171,12 +174,11 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
     context: (frontmatter.context as string) || undefined,
   }
 
-  const remoteImports = await resolveRemoteImport(remoteOptions)
-  const typedImports = remoteImports as RemoteImportResult | null
+  const resolvedUrl = await resolveRemoteImport(remoteOptions)
 
   // Handle layout resolution with proper null checks
-  if (typedImports && typedImports.layout && typeof typedImports.layout === 'string') {
-    processedCode = `export { default as layout } from '${typedImports.layout}'\n${processedCode}`
+  if (resolvedUrl) {
+    processedCode = `export { default as layout } from '${resolvedUrl}'\n${processedCode}`
   } else if (options.layout) {
     // Fallback to options.layout if remote import failed
     console.warn('Layout import failed, using fallback layout')
@@ -186,19 +188,19 @@ export async function processMDX(options: MDXProcessorOptions): Promise<Processe
     processedCode = `export const layout = undefined\n${processedCode}`
   }
 
-  // Handle component resolution with proper null checks
-  if (typedImports && typedImports.components) {
-    Object.entries(typedImports.components).forEach(([name, component]) => {
-      if (typeof component === 'string') {
-        processedCode = `export { default as ${name} } from '${component}'\n${processedCode}`
-      } else {
-        console.warn(`Skipping component ${name}: invalid import URL`)
+  // Handle component resolution
+  if (options.components) {
+    for (const [name, url] of Object.entries(options.components)) {
+      if (typeof url === 'string') {
+        const resolvedComponentUrl = await resolveRemoteImport({ url, context })
+        if (resolvedComponentUrl) {
+          processedCode = `export { default as ${name} } from '${resolvedComponentUrl}'\n${processedCode}`
+        }
       }
-    })
+    }
   }
 
-  // Combine exports with content
-  processedCode = `${componentExports}\n${processedCode}`
+  // Return the processed result
 
   return {
     code: processedCode,

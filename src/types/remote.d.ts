@@ -7,12 +7,8 @@ export interface RemoteImportOptions extends Partial<ComponentResolutionOptions>
   context?: string
 }
 
-export interface RemoteImportResult {
-  layout?: ComponentType
-  components?: Record<string, ComponentType>
-  layoutString?: string
-  componentStrings?: Record<string, string>
-}
+// RemoteImportResult is now just a URL string
+export type RemoteImportResult = string
 
 // Re-export next-mdxld types for convenience
 export type { ComponentResolutionOptions, LayoutResolutionOptions }

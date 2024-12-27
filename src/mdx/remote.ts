@@ -34,15 +34,7 @@ export async function resolveRemoteImport({ url, version, context }: RemoteImpor
       return null
     }
 
-    // Determine if this is a component or layout based on URL/path structure
-    const isLayout = url.toLowerCase().includes('layout') || url.toLowerCase().includes('theme') || (context && context.toLowerCase().includes('layout'))
-
-    const importStatement = `import('${resolvedUrl}').then(m => m.default)`
-
-    return {
-      componentStrings: isLayout ? {} : { [resolvedUrl]: importStatement },
-      layoutString: isLayout ? importStatement : undefined,
-    }
+    return resolvedUrl
   } catch (error) {
     console.error('Failed to resolve remote import:', error)
     return null
@@ -99,14 +91,13 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
     // Convert package name to esm.sh URL if needed
     const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}`
 
-    // Try resolving through next-mdxld first
+    // Resolve the URL through our resolver
     const result = await resolveRemoteImport({ url: resolvedUrl })
-    if (result?.components || result?.layout) {
-      // Component or layout found through next-mdxld
-      return JSON.stringify(result)
+    if (result) {
+      return result
     }
 
-    // Fallback to direct fetch if not found through next-mdxld
+    // Fallback to direct fetch if not resolved
     const response = await fetch(resolvedUrl)
     if (!response.ok) {
       throw new Error(`Failed to fetch component from ${resolvedUrl}: ${response.statusText}`)
