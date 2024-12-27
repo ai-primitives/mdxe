@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import React from 'react'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
@@ -35,22 +36,22 @@ export async function resolveRemoteImport({ url, version, context }: RemoteImpor
     }
 
     const content = await response.text()
-    
+
     // Check if it's a component or layout
     if (content.includes('export default')) {
       const importStr = `import('${resolvedUrl}').then(m => m.default)`
       if (context?.includes('layouts')) {
         return {
-          layout: () => null,
+          layout: () => React.createElement('div'),
           layoutString: importStr,
-          url: resolvedUrl
+          url: resolvedUrl,
         }
       } else {
         const name = path.basename(url).replace(/\.[^/.]+$/, '')
         return {
-          components: { [name]: () => null },
+          components: { [name]: () => React.createElement('div') },
           componentStrings: { [name]: importStr },
-          url: resolvedUrl
+          url: resolvedUrl,
         }
       }
     }
@@ -106,12 +107,17 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
         const content = await fs.readFile(cachePath, 'utf-8')
         // If cache is stale but still valid, trigger a background refresh
         if (cacheAge > 23 * 60 * 60 * 1000) {
-          void fetch(url).then(async response => {
-            if (response.ok) {
-              const content = await response.text()
-              await fs.writeFile(cachePath, content, 'utf-8')
-            }
-          }).catch(() => {/* ignore background fetch errors */})
+          void globalThis
+            .fetch(url)
+            .then(async (response) => {
+              if (response.ok) {
+                const content = await response.text()
+                await fs.writeFile(cachePath, content, 'utf-8')
+              }
+            })
+            .catch(() => {
+              /* ignore background fetch errors */
+            })
         }
         return content
       }
@@ -122,33 +128,28 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
     // Convert package name to esm.sh URL if needed
     const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}`
 
-    const result = await resolveRemoteImport({ url: resolvedUrl })
-    if (result?.url) {
-      const response = await fetch(result.url)
+    try {
+      const response = await globalThis.fetch(resolvedUrl)
       if (!response.ok) {
-        throw new Error(`Failed to fetch component from ${result.url}`)
+        throw new Error(`Failed to fetch component from ${resolvedUrl}`)
       }
-      const content = await response.text()
-      await fs.writeFile(cachePath, content, 'utf-8')
-      return content
-    }
 
-    // Fallback to direct fetch if not resolved
-    const response = await fetch(resolvedUrl)
-    if (!response.ok) {
+      const content = await response.text()
+
+      // Cache the content
+      await fs.writeFile(cachePath, content, 'utf-8')
+
+      return content
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to fetch component from ${resolvedUrl}: ${error.message}`)
+      }
       throw new Error(`Failed to fetch component from ${resolvedUrl}`)
     }
-
-    const content = await response.text()
-
-    // Cache the content
-    await fs.writeFile(cachePath, content, 'utf-8')
-
-    return content
   } catch (error) {
     console.error('Failed to fetch remote component:', error)
     if (error instanceof Error) {
-      throw error
+      throw new Error(`Failed to fetch component from ${url}: ${error.message}`)
     }
     throw new Error(`Failed to fetch component from ${url}`)
   }

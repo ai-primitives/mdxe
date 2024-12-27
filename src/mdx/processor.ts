@@ -1,5 +1,5 @@
 import { resolveRemoteImport, fetchRemoteComponent } from './remote.js'
-import type { RemoteImportOptions, RemoteImportResult } from '../types/remote.d.ts'
+import type { RemoteImportOptions } from '../types/remote.d.ts'
 import remarkMdxld from 'remark-mdxld'
 import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'

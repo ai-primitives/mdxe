@@ -1,0 +1,39 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# testing
+coverage
+
+# next.js
+.next/
+out/
+build
+dist
+**/next-env.d.ts
+**/.next/**/*
+**/.next/types/**/*
+**/.next/static/**/*
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# test directories
+src/integration/__tests__/next-dev/node_modules/**/*
+src/integration/__tests__/next-dev/.next/**/*
+src/integration/__tests__/next-dev/.next/types/**/*
+src/integration/__tests__/next-dev/.next/static/**/*

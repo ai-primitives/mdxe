@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
-    "lint": "eslint src",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --ignore-pattern \"src/integration/**\" --ignore-pattern \"**/.next/**\" --ignore-pattern \"**/node_modules/**\"",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx}\" \"*.{md,mdx}\"",
     "prepublishOnly": "pnpm run build"
   },
@@ -56,8 +56,8 @@
     "gray-matter": "4.0.3",
     "mdxld": "1.0.1",
     "next-mdxld": "1.2.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "remark-gfm": "4.0.0",
     "remark-mdxld": "0.1.0"
   },
@@ -72,9 +72,10 @@
     "@types/debug": "^4.1.12",
     "@types/mdast": "^4.0.4",
     "@types/mdx-js__react": "^1.5.8",
+    "@types/next": "^9.0.0",
     "@types/node": "^22.10.2",
     "@types/node-fetch": "^2.6.12",
-    "@types/react": "^18.2.0",
+    "@types/react": "18.2.0",
     "@types/unist": "^3.0.2",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",

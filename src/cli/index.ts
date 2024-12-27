@@ -1,5 +1,4 @@
 import { processMDX } from '../mdx/processor.js'
-import { watch } from 'chokidar'
 import { resolve, extname, dirname } from 'path'
 import { existsSync, statSync, readFileSync } from 'fs'
 import { cosmiconfig } from 'cosmiconfig'
@@ -12,8 +11,6 @@ function createLogger(prefix: string) {
 }
 
 const log = {
-  watcher: createLogger('WATCHER'),
-  fs: createLogger('FS'),
   cli: createLogger('CLI'),
 }
 
@@ -193,179 +190,8 @@ export async function cli(args: string[] = process.argv.slice(2)): Promise<void>
 
   // Handle watch mode
   if (options.watch) {
-    const watchPath = typeof options.watch === 'string' ? options.watch : remainingArgs[0]
-    if (!watchPath) {
-      console.error('Watch path is required')
-      process.exit(1)
-    }
-
-    const watchTarget = resolve(process.cwd(), watchPath)
-    log.cli('Watch target:', watchTarget)
-
-    if (!existsSync(watchTarget)) {
-      console.error('Watch target not found:', watchTarget)
-      process.exit(1)
-    }
-
-    const isDirectory = statSync(watchTarget).isDirectory()
-    const patterns = isDirectory ? [`${watchTarget}/**/*.mdx`, `${watchTarget}/**/*.md`] : [watchTarget]
-
-    // Resolve absolute paths and validate
-    const absolutePatterns = patterns.map((p) => {
-      const resolved = resolve(process.cwd(), p)
-      log.watcher(`Resolved pattern ${p} to ${resolved}`)
-      return resolved
-    })
-
-    // Validate paths before watching
-    absolutePatterns.forEach((pattern) => {
-      const baseDir = pattern.includes('*') ? dirname(pattern) : pattern
-      if (!existsSync(baseDir)) {
-        log.watcher(`Warning: Base directory ${baseDir} does not exist`)
-      }
-    })
-
-    log.watcher(`Starting watcher with patterns: ${JSON.stringify(absolutePatterns)}`)
-    log.watcher(`Current working directory: ${process.cwd()}`)
-
-    const watchOptions = {
-      ignored: typeof config.watch === 'object' ? config.watch.ignore : undefined,
-      persistent: true,
-      ignoreInitial: true,
-      cwd: process.cwd(),
-      usePolling: false,
-      awaitWriteFinish: {
-        stabilityThreshold: 300, // Wait for writes to finish
-        pollInterval: 100, // Check every 100ms
-      },
-      interval: 100, // Standard polling interval
-      binaryInterval: 300, // Standard binary polling
-      alwaysStat: true, // Get detailed file stats
-      atomic: true, // Enable atomic writes detection
-      ignorePermissionErrors: true,
-      followSymlinks: true, // Follow symlinks
-      depth: undefined, // Watch all subdirectories
-      disableGlobbing: false, // Enable globbing for pattern matching
-    }
-
-    log.watcher('Initializing watcher with options:', watchOptions)
-
-    log.watcher(`Watch options: ${JSON.stringify(watchOptions, null, 2)}`)
-    const watcher = watch(absolutePatterns, watchOptions)
-
-    // Set up debug logging for all watcher events
-    const debugEvent = (event: string, path?: string) => {
-      const msg = `[DEBUG] Watcher event: ${event}${path ? ` - ${path}` : ''}`
-      log.watcher(msg)
-      process.stdout.write(msg + '\n')
-    }
-
-    // Set up all event handlers immediately with debug logging
-    watcher
-      .on('add', (path) => debugEvent('add', path))
-      .on('change', async (path) => {
-        debugEvent('change', path)
-        try {
-          await processMDXFile(path, config)
-          log.watcher(`Successfully processed: ${path}`)
-          process.stdout.write(`Successfully processed file: ${path}\n`)
-        } catch (error) {
-          log.watcher(`Error processing ${path}:`, error)
-          process.stdout.write(`Error processing file: ${path} - ${error}\n`)
-        }
-      })
-      .on('unlink', (path) => debugEvent('unlink', path))
-      .on('addDir', (path) => debugEvent('addDir', path))
-      .on('unlinkDir', (path) => debugEvent('unlinkDir', path))
-      .on('error', (error) => {
-        debugEvent('error')
-        log.watcher('Watcher error:', error)
-        process.stdout.write(`Watcher error: ${error}\n`)
-      })
-      .on('raw', (event, path, details) => {
-        debugEvent('raw', `${path} - ${event} - ${JSON.stringify(details)}`)
-      })
-
-    // Set up ready handler with enhanced logging
-    const readyPromise = new Promise<void>((resolve) => {
-      watcher.once('ready', () => {
-        debugEvent('ready')
-        log.watcher('Initial scan complete')
-        log.watcher('Watched paths:', JSON.stringify(watcher.getWatched()))
-        process.stdout.write('Initial scan complete\n')
-        process.stdout.write(`[DEBUG] Watch base path: ${process.cwd()}\n`)
-        process.stdout.write(`[DEBUG] Watch patterns: ${JSON.stringify(absolutePatterns)}\n\n`)
-        // Ensure all output is written immediately
-        process.stdout.write('\n')
-        resolve()
-      })
-    })
-
-    // Wait for watcher to be ready
-    await readyPromise
-    console.log('[DEBUG] Watching for changes...')
-
-    // Log all watcher events for debugging
-    watcher.on('all', (event: string, filePath: string) => {
-      log.watcher(`Event: ${event} on file: ${filePath}`)
-      try {
-        const stats = statSync(filePath)
-        log.fs(`File stats for ${event}:`, {
-          exists: existsSync(filePath),
-          inode: stats.ino,
-          size: stats.size,
-          mtime: stats.mtime,
-          ctime: stats.ctime,
-          mode: stats.mode,
-          uid: stats.uid,
-          gid: stats.gid,
-        })
-      } catch (error) {
-        log.fs(`Error getting stats for ${filePath}:`, error)
-      }
-    })
-
-    watcher.on('add', async (filePath: string | Error) => {
-      if (filePath instanceof Error) {
-        console.error('Error in add handler:', filePath.message)
-        return
-      }
-      const absolutePath = resolve(process.cwd(), filePath)
-      try {
-        await processMDXFile(absolutePath, config)
-        console.log('Successfully processed file:', absolutePath)
-      } catch (error: unknown) {
-        const errorMsg = formatError(error)
-        console.error('Error processing file:', errorMsg)
-      }
-    })
-
-    watcher.on('change', async (filePath: string | Error) => {
-      if (filePath instanceof Error) {
-        process.stdout.write(`Error in change handler: ${filePath.message}\n`)
-        return
-      }
-      const absolutePath = resolve(process.cwd(), filePath)
-      process.stdout.write(`File ${absolutePath} has been changed\n`)
-      try {
-        await processMDXFile(absolutePath, config)
-        process.stdout.write(`Successfully processed file: ${absolutePath}\n`)
-      } catch (error: unknown) {
-        const errorMsg = formatError(error)
-        process.stdout.write(`Error processing file: ${errorMsg}\n`)
-      }
-    })
-
-    watcher.on('error', (error: unknown) => {
-      const errorMsg = formatError(error)
-      console.error('Watcher error:', errorMsg)
-    })
-
-    // Handle cleanup
-    process.on('SIGINT', () => {
-      watcher.close()
-      process.exit(0)
-    })
+    console.log('Watch mode is now handled by Next.js dev server. Please use `next dev` instead.')
+    process.exit(0)
   } else {
     await processMDXFile(target, config)
   }

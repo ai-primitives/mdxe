@@ -7,7 +7,6 @@ export async function main() {
     return
   }
 
-
   if (process.argv.includes('--help')) {
     console.log(`
 Usage: mdxe [options] [file]

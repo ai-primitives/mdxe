@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import type { ReactElement } from 'react'
 
 export interface RemoteImportOptions {
   url: string
@@ -6,18 +6,18 @@ export interface RemoteImportOptions {
   context?: string
   components?: {
     path?: string
-    props?: Record<string, any>
+    props?: Record<string, unknown>
   }
   layout?: {
     path?: string
-    props?: Record<string, any>
+    props?: Record<string, unknown>
   }
 }
 
 export interface RemoteImportResult {
   url?: string
-  components?: Record<string, () => any>
+  components?: Record<string, () => ReactElement>
   componentStrings?: Record<string, string>
-  layout?: () => any
+  layout?: () => ReactElement
   layoutString?: string
 }
