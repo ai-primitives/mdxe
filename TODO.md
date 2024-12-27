@@ -56,6 +56,22 @@
 
 ## Blockers
 
+### Deprecated Dependencies
+
+- [ ] Resolve mdast@3.0.0 dependency warning
+  - **Description**: The mdast@3.0.0 package appears as a deprecated sub-dependency
+  - **Impact**: While not causing immediate issues, this deprecated dependency could cause problems in future updates
+  - **Dependencies Affected**: 
+    - next-mdxld (includes mdast as sub-dependency)
+    - remark-frontmatter
+  - **Reproduction Steps**:
+    1. Run `pnpm install` in the project root
+    2. Observe warning: `WARN  1 deprecated subdependencies found: mdast@3.0.0`
+  - **Required Actions**:
+    - Document issue in next-mdxld repository
+    - Monitor for updates to mdast package
+    - Plan migration strategy if deprecation becomes critical
+
 ### Pre-existing Lint Issues
 
 The following lint issues exist in the codebase but are unrelated to recent changes:
