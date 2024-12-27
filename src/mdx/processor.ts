@@ -34,12 +34,22 @@ export interface ProcessedMDX {
   }
 }
 
+import { readFileSync } from 'fs'
+
+export async function processFile(filepath: string): Promise<ProcessedMDX> {
+  const content = readFileSync(filepath, 'utf-8')
+  return processMDX({
+    filepath,
+    content,
+  })
+}
+
 export async function processMDX(options: MDXProcessorOptions): Promise<ProcessedMDX> {
   const { content = '', context, type } = options
   let processedCode = content
   let yamlld: ProcessedMDX['yamlld'] = {
-    $type: undefined,
-    $context: undefined,
+    $type: type,
+    $context: context,
   }
   let frontmatter: Record<string, unknown> = {}
   // Initialize state for processing

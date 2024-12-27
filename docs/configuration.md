@@ -8,9 +8,6 @@ Create `mdxe.config.js` in your project root:
 
 ```javascript
 module.exports = {
-  // Watch for file changes
-  watch: false,
-
   // Output directory for processed files
   outDir: 'dist',
 

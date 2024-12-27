@@ -101,9 +101,19 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
       const stats = await fs.stat(cachePath)
       const cacheAge = Date.now() - stats.mtimeMs
 
-      // Cache is valid for 24 hours
-      if (cacheAge < 24 * 60 * 60 * 1000) {
-        return await fs.readFile(cachePath, 'utf-8')
+      // Cache is valid for 24 hours and must have content
+      if (cacheAge < 24 * 60 * 60 * 1000 && stats.size > 0) {
+        const content = await fs.readFile(cachePath, 'utf-8')
+        // If cache is stale but still valid, trigger a background refresh
+        if (cacheAge > 23 * 60 * 60 * 1000) {
+          void fetch(url).then(async response => {
+            if (response.ok) {
+              const content = await response.text()
+              await fs.writeFile(cachePath, content, 'utf-8')
+            }
+          }).catch(() => {/* ignore background fetch errors */})
+        }
+        return content
       }
     } catch {
       // Cache miss or error, proceed with fetch
@@ -112,26 +122,36 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
     // Convert package name to esm.sh URL if needed
     const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}`
 
-    // Resolve the URL through our resolver
-    const result = await resolveRemoteImport({ url: resolvedUrl })
-    if (result?.url) {
-      return result.url
+    try {
+      // Resolve the URL through our resolver
+      const result = await resolveRemoteImport({ url: resolvedUrl })
+      if (result?.url) {
+        const response = await fetch(result.url)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch component from ${result.url}`)
+        }
+        const content = await response.text()
+        await fs.writeFile(cachePath, content, 'utf-8')
+        return content
+      }
+
+      // Fallback to direct fetch if not resolved
+      const response = await fetch(resolvedUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch component from ${resolvedUrl}`)
+      }
+
+      const content = await response.text()
+
+      // Cache the content
+      await fs.writeFile(cachePath, content, 'utf-8')
+
+      return content
+    } catch (error) {
+      console.error('Failed to fetch remote component:', error)
+      if (error instanceof Error) {
+        throw error
+      }
+      throw new Error(`Failed to fetch component from ${resolvedUrl}`)
     }
-
-    // Fallback to direct fetch if not resolved
-    const response = await fetch(resolvedUrl)
-    if (!response.ok) {
-      throw new Error(`Failed to fetch component from ${resolvedUrl}: ${response.statusText}`)
-    }
-
-    const content = await response.text()
-
-    // Cache the content
-    await fs.writeFile(cachePath, content, 'utf-8')
-
-    return content
-  } catch (error) {
-    console.error('Failed to fetch remote component:', error)
-    throw error
-  }
 }
