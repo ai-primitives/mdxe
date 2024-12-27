@@ -17,7 +17,7 @@
     }
   },
   "bin": {
-    "mdxe": "./bin/cli.js"
+    "mdxe": "bin/cli.js"
   },
   "files": [
     "dist",
