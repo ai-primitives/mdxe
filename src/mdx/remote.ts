@@ -2,9 +2,9 @@ import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
-
-import { resolveComponent, resolveLayout } from 'next-mdxld'
-import type { ComponentResolutionOptions, LayoutResolutionOptions, RemoteImportOptions, RemoteImportResult } from '../types/remote.js'
+import fetch from 'node-fetch'
+// Import only the types we need
+import type { RemoteImportOptions, RemoteImportResult } from '../types/remote.js'
 
 const CACHE_DIR = path.join(os.tmpdir(), 'mdxe-remote-cache')
 const FILE_EXTENSIONS = ['.tsx', '.jsx', '.ts', '.js']
@@ -12,10 +12,14 @@ const ALLOWED_DOMAINS = ['esm.sh', 'cdn.skypack.dev', 'unpkg.com']
 
 export async function resolveRemoteImport({ url, version, context }: RemoteImportOptions): Promise<RemoteImportResult | null> {
   try {
+    if (!url) {
+      return null
+    }
+
     // Validate URL domain if it's a full URL
     if (url.startsWith('http')) {
       const urlObj = new URL(url)
-      if (!ALLOWED_DOMAINS.some(domain => urlObj.hostname === domain)) {
+      if (!ALLOWED_DOMAINS.some((domain) => urlObj.hostname === domain)) {
         throw new Error(`Domain ${urlObj.hostname} not allowed for remote imports`)
       }
     }
@@ -23,35 +27,22 @@ export async function resolveRemoteImport({ url, version, context }: RemoteImpor
     // Convert package name to esm.sh URL if needed
     const resolvedUrl = url.startsWith('http') ? url : `https://esm.sh/${url}${version ? `@${version}` : ''}`
 
-    // Attempt to resolve as component first
-    const componentOptions: ComponentResolutionOptions = {
-      type: resolvedUrl,
-      context,
-      components: {}
-    }
-    const component = await resolveComponent(componentOptions)
-    if (component) {
-      return {
-        components: { [resolvedUrl]: component },
-        componentStrings: { [resolvedUrl]: `import('${resolvedUrl}').then(m => m.default)` }
-      }
+    // Check if URL is accessible
+    const response = await fetch(resolvedUrl, { method: 'HEAD' })
+    if (!response.ok) {
+      console.warn(`Failed to resolve remote import: ${resolvedUrl}`)
+      return null
     }
 
-    // Try resolving as layout
-    const layoutOptions: LayoutResolutionOptions = {
-      type: resolvedUrl,
-      context,
-      layouts: {}
-    }
-    const layout = await resolveLayout(layoutOptions)
-    if (layout) {
-      return {
-        layout,
-        layoutString: `import('${resolvedUrl}').then(m => m.default)`
-      }
-    }
+    // Determine if this is a component or layout based on URL/path structure
+    const isLayout = url.toLowerCase().includes('layout') || url.toLowerCase().includes('theme') || (context && context.toLowerCase().includes('layout'))
 
-    return null
+    const importStatement = `import('${resolvedUrl}').then(m => m.default)`
+
+    return {
+      componentStrings: isLayout ? {} : { [resolvedUrl]: importStatement },
+      layoutString: isLayout ? importStatement : undefined,
+    }
   } catch (error) {
     console.error('Failed to resolve remote import:', error)
     return null
@@ -80,7 +71,7 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
     // Validate URL domain for remote components
     if (url.startsWith('http')) {
       const urlObj = new URL(url)
-      if (!ALLOWED_DOMAINS.some(domain => urlObj.hostname === domain)) {
+      if (!ALLOWED_DOMAINS.some((domain) => urlObj.hostname === domain)) {
         throw new Error(`Domain ${urlObj.hostname} not allowed for remote imports`)
       }
     }
@@ -122,7 +113,6 @@ export async function fetchRemoteComponent(url: string, baseDir?: string): Promi
     }
 
     const content = await response.text()
-
 
     // Cache the content
     await fs.writeFile(cachePath, content, 'utf-8')
