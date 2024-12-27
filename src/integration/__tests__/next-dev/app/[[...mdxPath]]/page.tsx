@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { createMDXPage, generateMetadata as generateMDXMetadata } from 'next-mdxld'
 import { join } from 'path'
 
@@ -7,6 +8,6 @@ const mdxPage = createMDXPage({
 })
 
 // Configure generateMetadata with contentDir
-export const generateMetadata = ({ params }: { params: { mdxPath?: string[] } }) => generateMDXMetadata({ params }, contentDir)
+export const generateMetadata = ({ params }: { params: { mdxPath?: string[] } }): Promise<Metadata> => generateMDXMetadata({ params }, contentDir)
 
 export default mdxPage
