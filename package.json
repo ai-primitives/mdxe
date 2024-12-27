@@ -41,10 +41,10 @@
   "homepage": "https://mdx.org.ai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ai-primitives/package-template.git"
+    "url": "git+https://github.com/ai-primitives/mdxe.git"
   },
   "bugs": {
-    "url": "https://github.com/ai-primitives/package-template/issues"
+    "url": "https://github.com/ai-primitives/mdxe/issues"
   },
   "engines": {
     "node": ">=20.18.1"
